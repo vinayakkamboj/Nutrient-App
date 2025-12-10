@@ -1,6 +1,15 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import Image from "next/image";
+import { Space_Grotesk } from "next/font/google";
+
+// Load Space Grotesk font from Google Fonts
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  weight: ["600"], // semibold weight similar to Monument Grotesk
+  display: "swap",
+});
 
 export default function Home() {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -35,13 +44,26 @@ export default function Home() {
   const HEADER_HEIGHT = 56;
 
   return (
-    <main className="flex min-h-screen flex-col bg-background text-foreground">
+    <main className="flex min-h-screen flex-col text-foreground" style={{ backgroundColor: "#1a1414" }}>
       <header
         className="flex items-center justify-between border-b px-4"
-        style={{ height: HEADER_HEIGHT }}
+        style={{ height: HEADER_HEIGHT, backgroundColor: "#1a1414" }}
       >
-        <div className="flex items-center gap-2">
-          <span className="text-lg font-semibold">Nutrient App</span>
+        <div className="flex items-center gap-3">
+          {/* Logo - increased from 32x32 to 48x48 */}
+          <Image
+            src="/logo.png"
+            alt="Nutrient Logo"
+            width={48}
+            height={48}
+            className="object-contain"
+          />
+          {/* Space Grotesk font applied */}
+          <span 
+            className={`${spaceGrotesk.className} text-2xl tracking-tight`}
+          >
+            Nutrient
+          </span>
         </div>
       </header>
 

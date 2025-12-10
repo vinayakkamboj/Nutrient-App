@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 
 // ⬇️ update this metadata block
 export const metadata: Metadata = {
-  title: "Nutrient Chat App",
-  description: "Nutrient.io ChatGPT app built with Next.js and the OpenAI Apps SDK.",
+  title: "Nutrient App",
+  description: "Document Processing App using Nutrient Web SDK",
 };
 export default function RootLayout({
   children,
