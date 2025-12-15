@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 // ⬇️ update this metadata block
 export const metadata: Metadata = {
-  title: "Nutrient App",
+  title: "Nutrient",
   description: "Document Processing App using Nutrient Web SDK",
 };
 export default function RootLayout({
