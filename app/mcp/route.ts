@@ -28,10 +28,58 @@ function widgetMeta(widget: ContentWidget) {
   } as const;
 }
 
+// Tool name mappings for natural language
+const TOOL_ALIASES: Record<string, string> = {
+  "thumbnail": "sidebar-thumbnails",
+  "thumbnails": "sidebar-thumbnails",
+  "download": "export-pdf",
+  "export": "export-pdf",
+  "save": "export-pdf",
+  "search": "search",
+  "find": "search",
+  "crop": "document-crop",
+  "print": "print",
+  "signature": "signature",
+  "sign": "signature",
+  "highlight": "text-highlighter",
+  "highlighter": "highlighter",
+  "pen": "ink",
+  "draw": "ink",
+  "ink": "ink",
+  "eraser": "ink-eraser",
+  "zoom": "zoom-mode",
+  "zoom-in": "zoom-in",
+  "zoom-out": "zoom-out",
+  "pan": "pan",
+  "hand": "pan",
+  "pager": "pager",
+  "pages": "pager",
+  "annotate": "annotate",
+  "annotations": "sidebar-annotations",
+  "outline": "sidebar-document-outline",
+  "bookmarks": "sidebar-bookmarks",
+  "note": "note",
+  "text": "text",
+  "image": "image",
+  "stamp": "stamp",
+  "line": "line",
+  "arrow": "arrow",
+  "rectangle": "rectangle",
+  "ellipse": "ellipse",
+  "circle": "ellipse",
+  "polygon": "polygon",
+  "editor": "document-editor",
+};
+
+function normalizeToolName(name: string): string {
+  const n = name.toLowerCase().trim();
+  return TOOL_ALIASES[n] || n;
+}
+
 const handler = createMcpHandler(async (server) => {
   const html = await getAppsSdkCompatibleHtml(baseURL, "/");
 
-  // OpenSDK Tool Widget
+  // OpenSDK Tool Widget - YOUR ORIGINAL
   const openSDKWidget: ContentWidget = {
     id: "open_sdk",
     title: "Open Nutrient SDK",
@@ -43,7 +91,7 @@ const handler = createMcpHandler(async (server) => {
     widgetDomain: baseURL,
   };
 
-  // PDF Upload widget - FIXED VERSION
+  // PDF Upload widget - YOUR ORIGINAL WITH TOOLBAR HELPERS ADDED
   const pdfUploadWidget: ContentWidget = {
     id: "upload_pdf_viewer",
     title: "PDF Upload & Viewer",
@@ -177,7 +225,7 @@ const handler = createMcpHandler(async (server) => {
         <body>
           <header class="navbar">
             <div class="navbar-left">
-              <img src="${baseURL}/logo.png" alt="Nutrient" class="navbar-logo" onerror="this.style.display='none'">
+              <img src="/logo.png" alt="Nutrient" class="navbar-logo" onerror="this.style.display='none'">
               <span class="navbar-title">Nutrient</span>
             </div>
             <div class="navbar-right">
@@ -221,7 +269,6 @@ const handler = createMcpHandler(async (server) => {
           <div id="info" class="info hidden"></div>
           <div id="viewer" class="viewer-container"></div>
 
-          <!-- Updated SDK URL - using correct version -->
           <script src="https://cdn.cloud.pspdfkit.com/pspdfkit-web@2024.7.0/pspdfkit.js"></script>
           
           <script>
@@ -267,7 +314,6 @@ const handler = createMcpHandler(async (server) => {
                 infoDiv.classList.add('hidden');
               }
 
-              // Wait for PSPDFKit to load
               function waitForPSPDFKit() {
                 return new Promise((resolve, reject) => {
                   let attempts = 0;
@@ -287,7 +333,6 @@ const handler = createMcpHandler(async (server) => {
                 });
               }
 
-              // Initialize viewer
               async function initializeViewer() {
                 try {
                   showLoading(true);
@@ -319,37 +364,36 @@ const handler = createMcpHandler(async (server) => {
                 try {
                   console.log('Loading file:', file.name, 'Type:', file.type, 'Size:', file.size);
 
-                  // Unload previous instance if exists
                   if (viewerInstance) {
                     await window.PSPDFKit.unload(viewerDiv);
                     viewerInstance = null;
                   }
 
-                  // Create blob URL
                   const fileUrl = URL.createObjectURL(file);
                   console.log('Created blob URL:', fileUrl);
 
-                  // Load document
                   viewerInstance = await window.PSPDFKit.load({
                     container: viewerDiv,
                     document: fileUrl,
                     baseUrl: "https://cdn.cloud.pspdfkit.com/pspdfkit-web@2024.7.0/",
                   });
 
-                  console.log('Document loaded successfully');
+                                    __startWatchingToolOutput();
+
+console.log('Document loaded successfully');
                   
-                  // Hide upload section and show viewer
+                  // Expose instance globally for toolbar manipulation
+                  window.nutrientViewerInstance = viewerInstance;
+                  
                   uploadSection.style.display = 'none';
                   viewerDiv.classList.add('active');
-                  showInfo(\`Loaded: \${file.name}\`);
+                  showInfo('Loaded: ' + file.name);
                   
-                  // Clean up blob URL after a delay
                   setTimeout(() => URL.revokeObjectURL(fileUrl), 1000);
                 } catch (error) {
                   console.error('Load error:', error);
-                  showError(\`Failed to load \${file.name}. Error: \${error.message}\`);
+                  showError('Failed to load ' + file.name + '. Error: ' + error.message);
                   
-                  // Show upload section again on error
                   uploadSection.style.display = 'block';
                   viewerDiv.classList.remove('active');
                 } finally {
@@ -358,7 +402,151 @@ const handler = createMcpHandler(async (server) => {
                 }
               }
 
-              // Event listeners
+              // ========== TOOLBAR MANIPULATION HELPERS ==========
+              // ========== TOOL OUTPUT -> LIVE TOOLBAR UPDATES ==========
+              // ChatGPT injects the latest tool output into window.openai.toolOutput.
+              // We poll for changes and apply them to the live PSPDFKit instance.
+              let __lastToolbarPayload = null;
+
+              function __applyToolbarUpdate(payload) {
+                if (!viewerInstance) return;
+                if (!payload) return;
+
+                const action = payload.action;
+                const tools = Array.isArray(payload.tools) ? payload.tools : [];
+
+                if (action === "reset") {
+                  viewerInstance.setToolbarItems(window.PSPDFKit.defaultToolbarItems);
+                  showInfo('Toolbar reset');
+                  return;
+                }
+
+                if (action === "keep_only") {
+                  viewerInstance.setToolbarItems(items =>
+                    items.filter(item => tools.includes(item.type))
+                  );
+                  showInfo('Toolbar updated');
+                  return;
+                }
+
+                if (action === "remove") {
+                  viewerInstance.setToolbarItems(items =>
+                    items.filter(item => !tools.includes(item.type))
+                  );
+                  showInfo('Toolbar updated');
+                  return;
+                }
+
+                if (action === "add") {
+                  viewerInstance.setToolbarItems(items => {
+                    const existing = new Set(items.map(i => i.type));
+                    const toAdd = tools.filter(t => !existing.has(t)).map(t => ({ type: t }));
+                    return items.concat(toAdd);
+                  });
+                  showInfo('Toolbar updated');
+                  return;
+                }
+
+                if (action === "get") {
+                  // no-op: widget already shows current toolbar via console helpers.
+                  return;
+                }
+              }
+
+              function __startWatchingToolOutput() {
+                // Apply once if toolOutput already exists
+                const initial = window.openai?.toolOutput?.toolbar;
+                __lastToolbarPayload = JSON.stringify(initial ?? null);
+                __applyToolbarUpdate(initial);
+
+                // Poll for changes (simple + reliable for vanilla widgets)
+                setInterval(() => {
+                  const next = window.openai?.toolOutput?.toolbar;
+                  const key = JSON.stringify(next ?? null);
+                  if (key !== __lastToolbarPayload) {
+                    __lastToolbarPayload = key;
+                    __applyToolbarUpdate(next);
+                  }
+                }, 250);
+              }
+
+              
+              window.removeToolbarItemsByType = function(removeTypes) {
+                if (!viewerInstance) {
+                  console.warn('Viewer instance not ready yet.');
+                  return { success: false, error: 'No document loaded' };
+                }
+                const typesToRemove = Array.isArray(removeTypes) ? removeTypes : [removeTypes];
+                viewerInstance.setToolbarItems((items) =>
+                  items.filter((item) => !typesToRemove.includes(item.type))
+                );
+                const remaining = viewerInstance.toolbarItems.map(i => i.type);
+                console.log('Removed:', typesToRemove, 'Remaining:', remaining);
+                showInfo('Toolbar updated');
+                return { success: true, currentItems: remaining };
+              };
+
+              window.setToolbarToOnlyTypes = function(allowedTypes) {
+                if (!viewerInstance) {
+                  console.warn('Viewer instance not ready yet.');
+                  return { success: false, error: 'No document loaded' };
+                }
+                const typesToKeep = Array.isArray(allowedTypes) ? allowedTypes : [allowedTypes];
+                viewerInstance.setToolbarItems((items) =>
+                  items.filter((item) => typesToKeep.includes(item.type))
+                );
+                const remaining = viewerInstance.toolbarItems.map(i => i.type);
+                console.log('Set toolbar to only:', typesToKeep, 'Result:', remaining);
+                showInfo('Toolbar updated');
+                return { success: true, currentItems: remaining };
+              };
+
+              window.addToolbarItemsByType = function(addTypes, insertIndex = null) {
+                if (!viewerInstance) {
+                  console.warn('Viewer instance not ready yet.');
+                  return { success: false, error: 'No document loaded' };
+                }
+                const typesToAdd = Array.isArray(addTypes) ? addTypes : [addTypes];
+                viewerInstance.setToolbarItems((items) => {
+                  const existingTypes = items.map(i => i.type);
+                  const newItems = typesToAdd
+                    .filter(type => !existingTypes.includes(type))
+                    .map(type => ({ type }));
+                  
+                  if (insertIndex !== null && insertIndex >= 0 && insertIndex <= items.length) {
+                    return [...items.slice(0, insertIndex), ...newItems, ...items.slice(insertIndex)];
+                  }
+                  return [...items, ...newItems];
+                });
+                const current = viewerInstance.toolbarItems.map(i => i.type);
+                console.log('Added:', typesToAdd, 'Current:', current);
+                showInfo('Toolbar updated');
+                return { success: true, currentItems: current };
+              };
+
+              window.resetToolbarToDefaults = function() {
+                if (!viewerInstance || !window.PSPDFKit) {
+                  console.warn('Viewer or SDK not ready yet.');
+                  return { success: false, error: 'Viewer not ready' };
+                }
+                const defaultItems = window.PSPDFKit.defaultToolbarItems;
+                viewerInstance.setToolbarItems(defaultItems);
+                const current = viewerInstance.toolbarItems.map(i => i.type);
+                console.log('Reset toolbar to defaults:', current);
+                showInfo('Toolbar reset to defaults');
+                return { success: true, currentItems: current };
+              };
+
+              window.getToolbarItems = function() {
+                if (!viewerInstance) {
+                  return [];
+                }
+                return viewerInstance.toolbarItems.map(item => item.type);
+              };
+
+              // ========== END TOOLBAR HELPERS ==========
+
+              // Event listeners - YOUR ORIGINAL
               navbarBtn.addEventListener('click', () => {
                 if (viewerReady) {
                   fileInput.click();
@@ -379,11 +567,10 @@ const handler = createMcpHandler(async (server) => {
                 const file = e.target.files[0];
                 if (file) {
                   loadDocument(file);
-                  e.target.value = ''; // Reset input
+                  e.target.value = '';
                 }
               });
 
-              // Drag and drop
               uploadArea.addEventListener('dragover', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -404,11 +591,9 @@ const handler = createMcpHandler(async (server) => {
                 if (file) loadDocument(file);
               });
 
-              // Prevent default drag/drop on document
               document.addEventListener('dragover', (e) => e.preventDefault());
               document.addEventListener('drop', (e) => e.preventDefault());
 
-              // Initialize on load
               initializeViewer();
             })();
           </script>
@@ -419,7 +604,7 @@ const handler = createMcpHandler(async (server) => {
     widgetDomain: "https://cdn.cloud.pspdfkit.com",
   };
 
-  // Register resources
+  // Register resources - YOUR ORIGINAL
   server.registerResource(
     "open-sdk-widget",
     openSDKWidget.templateUri,
@@ -513,7 +698,7 @@ const handler = createMcpHandler(async (server) => {
     })
   );
 
-  // Register tools
+  // Register tools - YOUR ORIGINAL
   server.registerTool(
     openSDKWidget.id,
     {
@@ -561,6 +746,64 @@ const handler = createMcpHandler(async (server) => {
         _meta: widgetMeta(pdfUploadWidget),
       };
     }
+  );
+
+  // ========== NEW: TOOLBAR CUSTOMIZATION TOOL ==========
+  server.registerTool(
+    "customize_toolbar",
+    {
+      title: "Customize PDF Viewer Toolbar",
+      description: `Customize the toolbar in the PDF viewer. 
+
+Actions:
+- remove: Remove specific tools from toolbar
+- keep_only: Keep ONLY specified tools, remove everything else  
+- add: Add tools to toolbar
+- reset: Reset toolbar to defaults
+- get: Get current toolbar items
+
+Tool names (use exact names or aliases):
+- sidebar-thumbnails (or: thumbnail, thumbnails)
+- export-pdf (or: download, export, save)
+- search (or: find)
+- document-crop (or: crop)
+- print
+- signature (or: sign)
+- zoom-in, zoom-out, zoom-mode
+- annotate, ink, highlighter, text-highlighter
+- note, text, line, arrow, rectangle, ellipse
+- pager, pan, document-editor
+
+Example: To keep only thumbnails and download, use action "keep_only" with tools ["sidebar-thumbnails", "export-pdf"]`,
+      inputSchema: {
+        action: z.enum(["remove", "keep_only", "add", "reset", "get"]).describe("The action to perform"),
+        tools: z.array(z.string()).optional().describe("Tool types to modify. Not needed for reset/get."),
+      },
+      _meta: widgetMeta(pdfUploadWidget),
+    },
+    async ({ action, tools }) => {
+
+      // Normalize tool names/aliases to actual PSPDFKit toolbar item `type` values.
+      const normalizedTools = (tools || []).map(normalizeToolName);
+
+      // In the ChatGPT App SDK template, tools cannot execute JS inside the widget iframe.
+      // Instead, we return a structured payload that the widget reads from `window.openai.toolOutput`
+      // and applies to the live PSPDFKit instance.
+      return {
+        content: [{
+          type: "text",
+          text: `Toolbar update: ${action}${normalizedTools.length ? ` [${normalizedTools.join(", ")}]` : ""}`,
+        }],
+        structuredContent: {
+          toolbar: {
+            action,
+            tools: normalizedTools,
+          },
+          timestamp: new Date().toISOString(),
+        },
+        _meta: widgetMeta(pdfUploadWidget),
+      };
+          }
   );
 });
 
