@@ -76,7 +76,9 @@ function normalizeToolName(name: string): string {
   return TOOL_ALIASES[n] || n;
 }
 
-const handler = createMcpHandler(async (server) => {
+// Note: Some versions of the MCP server typings don't include `registerTool` / `registerResource`.
+// Runtime supports them (as used elsewhere in this file), so we type `server` as `any` to avoid TS errors.
+const handler = createMcpHandler(async (server: any) => {
   const html = await getAppsSdkCompatibleHtml(baseURL, "/");
 
   // OpenSDK Tool Widget - YOUR ORIGINAL
@@ -378,7 +380,9 @@ const handler = createMcpHandler(async (server) => {
                     baseUrl: "https://cdn.cloud.pspdfkit.com/pspdfkit-web@2024.7.0/",
                   });
 
-                                    __startWatchingToolOutput();
+                  // Start polling for tool output updates (toolbar + tool selection)
+                  __startWatchingToolOutput();
+                  __startWatchingSelectToolOutput();
 
 console.log('Document loaded successfully');
                   
@@ -466,6 +470,120 @@ console.log('Document loaded successfully');
                   if (key !== __lastToolbarPayload) {
                     __lastToolbarPayload = key;
                     __applyToolbarUpdate(next);
+                  }
+                }, 250);
+              }
+
+              // ========== TOOL SELECTION HELPERS ==========
+              // Select a tool by setting ViewState.interactionMode.
+              // This is the documented way to programmatically activate tools.
+              // When successful, Nutrient/PSPDFKit automatically highlights the
+              // corresponding built-in toolbar button and the tool is ready to use.
+              let __lastSelectToolPayload = null;
+
+              // Map normalized tool keys -> InteractionMode enum member name + toolbar types to highlight.
+              // Notes:
+              // - Some items (export/print/etc.) are actions, not interaction modes.
+              // - Some modes require specific license components. We keep them here for future use;
+              //   if the enum member isn't present, we safely no-op.
+              const __MODE_MAP = {
+                // Navigation
+                pan: { modeName: "PAN", toolbarTypes: ["pan"] },
+                marqueeZoom: { modeName: "MARQUEE_ZOOM", toolbarTypes: ["marquee-zoom", "marqueeZoom"] },
+                search: { modeName: "SEARCH", toolbarTypes: ["search"] },
+
+                // Annotations
+                text: { modeName: "TEXT", toolbarTypes: ["text"] },
+                note: { modeName: "NOTE", toolbarTypes: ["note"] },
+                ink: { modeName: "INK", toolbarTypes: ["ink"] },
+                inkEraser: { modeName: "INK_ERASER", toolbarTypes: ["ink-eraser", "inkEraser"] },
+                line: { modeName: "SHAPE_LINE", toolbarTypes: ["line"] },
+                rectangle: { modeName: "SHAPE_RECTANGLE", toolbarTypes: ["rectangle"] },
+                ellipse: { modeName: "SHAPE_ELLIPSE", toolbarTypes: ["ellipse"] },
+                polygon: { modeName: "SHAPE_POLYGON", toolbarTypes: ["polygon"] },
+                polyline: { modeName: "SHAPE_POLYLINE", toolbarTypes: ["polyline"] },
+
+                // Redaction (license component)
+                redactText: { modeName: "REDACT_TEXT_HIGHLIGHTER", toolbarTypes: ["redact-text-highlighter", "redactText"] },
+                redactRectangle: { modeName: "REDACT_SHAPE_RECTANGLE", toolbarTypes: ["redact-rectangle", "redactRectangle"] },
+
+                // Document editor / crop (license component)
+                documentEditor: { modeName: "DOCUMENT_EDITOR", toolbarTypes: ["document-editor", "documentEditor"] },
+                documentCrop: { modeName: "DOCUMENT_CROP", toolbarTypes: ["document-crop", "documentCrop"] },
+
+                // Forms (license component)
+                formCreator: { modeName: "FORM_CREATOR", toolbarTypes: ["form-creator", "formCreator"] },
+
+                // Measurement (license component)
+                measurement: { modeName: "MEASUREMENT", toolbarTypes: ["measure", "measurement"] },
+              };
+
+              function __getInteractionMode(modeName) {
+                try {
+                  const SDK = window.PSPDFKit;
+                  if (!SDK || !SDK.InteractionMode) return null;
+                  return SDK.InteractionMode[modeName] ?? null;
+                } catch (_) {
+                  return null;
+                }
+              }
+
+              function __applySelectTool(payload) {
+                if (!viewerInstance) return;
+                if (!payload) return;
+
+                const toolKey = payload.toolKey;
+                const keepSelectedTool = payload.keepSelectedTool !== false;
+
+                // Always apply keepSelectedTool first.
+                viewerInstance.setViewState(vs => vs.set("keepSelectedTool", !!keepSelectedTool));
+
+                if (!toolKey || toolKey === "none") {
+                  viewerInstance.setViewState(vs => vs.set("interactionMode", null));
+                  // best-effort deselect custom toolbar items
+                  viewerInstance.setToolbarItems(items => items.map(i => ({ ...i, selected: false })));
+                  return;
+                }
+
+                const cfg = __MODE_MAP[toolKey];
+                if (!cfg) {
+                  console.warn("[select_tool] Unknown toolKey:", toolKey);
+                  return;
+                }
+
+                const mode = __getInteractionMode(cfg.modeName);
+                if (!mode) {
+                  console.warn("[select_tool] InteractionMode not available:", cfg.modeName, "for toolKey:", toolKey);
+                  return;
+                }
+
+                // Activate the tool (this is what makes it selected & ready to draw)
+                viewerInstance.setViewState(vs => vs.set("interactionMode", mode));
+
+                // For built-in toolbar items, the SDK auto-selects the button.
+                // For custom items, we do a best-effort highlight.
+                const types = cfg.toolbarTypes || [];
+                if (types.length) {
+                  viewerInstance.setToolbarItems(items =>
+                    items.map(item => ({
+                      ...item,
+                      selected: types.includes(item.type),
+                    }))
+                  );
+                }
+              }
+
+              function __startWatchingSelectToolOutput() {
+                const initial = window.openai?.toolOutput?.selectTool;
+                __lastSelectToolPayload = JSON.stringify(initial ?? null);
+                __applySelectTool(initial);
+
+                setInterval(() => {
+                  const next = window.openai?.toolOutput?.selectTool;
+                  const key = JSON.stringify(next ?? null);
+                  if (key !== __lastSelectToolPayload) {
+                    __lastSelectToolPayload = key;
+                    __applySelectTool(next);
                   }
                 }, 250);
               }
@@ -617,7 +735,7 @@ console.log('Document loaded successfully');
         "openai/widgetPrefersBorder": false,
       },
     },
-    async (uri) => ({
+    async (uri: any) => ({
       contents: [
         {
           uri: uri.href,
@@ -664,7 +782,7 @@ console.log('Document loaded successfully');
         },
       },
     },
-    async (uri) => ({
+    async (uri: any) => ({
       contents: [
         {
           uri: uri.href,
@@ -732,7 +850,8 @@ console.log('Document loaded successfully');
       },
       _meta: widgetMeta(pdfUploadWidget),
     },
-    async ({ message }) => {
+    async (args: { message?: string }) => {
+      const { message } = args;
       return {
         content: [{
           type: "text",
@@ -781,7 +900,8 @@ Example: To keep only thumbnails and download, use action "keep_only" with tools
       },
       _meta: widgetMeta(pdfUploadWidget),
     },
-    async ({ action, tools }) => {
+    async (args: { action: "remove" | "keep_only" | "add" | "reset" | "get"; tools?: string[] }) => {
+      const { action, tools } = args;
 
       // Normalize tool names/aliases to actual PSPDFKit toolbar item `type` values.
       const normalizedTools = (tools || []).map(normalizeToolName);
@@ -803,7 +923,118 @@ Example: To keep only thumbnails and download, use action "keep_only" with tools
         },
         _meta: widgetMeta(pdfUploadWidget),
       };
-          }
+    }
+  );
+
+  // ========== NEW: SELECT TOOL (INTERACTION MODE) ==========
+  // Returns an intent payload that the widget applies by setting ViewState.interactionMode.
+  server.registerTool(
+    "select_tool",
+    {
+      title: "Select tool in Nutrient viewer",
+      description:
+        "Selects/activates a tool (interaction mode) in the Nutrient Web SDK viewer and keeps it selected.",
+      inputSchema: {
+        tool: z.string().describe(
+          "Tool key to select. Example: text, ink, rectangle, ellipse, pan, search, marqueeZoom, note, inkEraser, line, polygon, polyline, redactText, redactRectangle, documentCrop, documentEditor, formCreator, measurement, none"
+        ),
+        keepSelectedTool: z
+          .boolean()
+          .optional()
+          .describe("Whether to keep the tool active after creating annotations."),
+      },
+      _meta: widgetMeta(pdfUploadWidget),
+    },
+    async (args: { tool: string; keepSelectedTool?: boolean }) => {
+      const { tool, keepSelectedTool } = args;
+      const normalize = (s: string) => (s ?? "").trim().toLowerCase();
+
+      // Synonyms -> canonical keys (match the widget's __MODE_MAP keys)
+      const TOOL_SYNONYMS: Record<string, string> = {
+        // navigation
+        hand: "pan",
+        move: "pan",
+        pan: "pan",
+        "marquee zoom": "marqueeZoom",
+        marqueezoom: "marqueeZoom",
+        zoom: "marqueeZoom",
+
+        // annotation basics
+        text: "text",
+        freetext: "text",
+        "free text": "text",
+        note: "note",
+        comment: "note",
+        sticky: "note",
+        ink: "ink",
+        pen: "ink",
+        draw: "ink",
+        eraser: "inkEraser",
+        "ink eraser": "inkEraser",
+        inkeraser: "inkEraser",
+
+        line: "line",
+        rectangle: "rectangle",
+        rect: "rectangle",
+        box: "rectangle",
+        ellipse: "ellipse",
+        circle: "ellipse",
+        polygon: "polygon",
+        polyline: "polyline",
+
+        // search
+        search: "search",
+        find: "search",
+
+        // crop / editor
+        crop: "documentCrop",
+        "document crop": "documentCrop",
+        documentcrop: "documentCrop",
+        editor: "documentEditor",
+        "document editor": "documentEditor",
+        documenteditor: "documentEditor",
+
+        // redaction
+        redact: "redactText",
+        "redact text": "redactText",
+        redacttext: "redactText",
+        "redact rectangle": "redactRectangle",
+        redactrectangle: "redactRectangle",
+
+        // forms / measurement
+        form: "formCreator",
+        "form creator": "formCreator",
+        formcreator: "formCreator",
+        measure: "measurement",
+        measurement: "measurement",
+
+        // reset
+        none: "none",
+        clear: "none",
+        reset: "none",
+      };
+
+      const key = TOOL_SYNONYMS[normalize(tool)] ?? normalize(tool);
+      const keep = keepSelectedTool !== false;
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: key === "none" ? "Clearing selected tool." : `Selecting tool: ${key}`,
+          },
+        ],
+        structuredContent: {
+          // Keep the same shape as customize_toolbar: top-level key that the widget polls
+          selectTool: {
+            toolKey: key,
+            keepSelectedTool: keep,
+          },
+          timestamp: new Date().toISOString(),
+        },
+        _meta: widgetMeta(pdfUploadWidget),
+      };
+    }
   );
 });
 
