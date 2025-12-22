@@ -81,19 +81,19 @@ function normalizeToolName(name: string): string {
 const handler = createMcpHandler(async (server: any) => {
   const html = await getAppsSdkCompatibleHtml(baseURL, "/");
 
-  // OpenSDK Tool Widget - YOUR ORIGINAL
-  const openSDKWidget: ContentWidget = {
-    id: "open_sdk",
-    title: "Open Nutrient SDK",
-    templateUri: "ui://widget/nutrient-sdk-viewer.html",
-    invoking: "Opening Nutrient SDK...",
-    invoked: "Nutrient SDK opened successfully",
+  // Demo Viewer Widget - RENAMED from open_sdk, lower priority
+  const demoViewerWidget: ContentWidget = {
+    id: "demo_viewer",
+    title: "Demo Viewer (Basic)",
+    templateUri: "ui://widget/demo-viewer.html",
+    invoking: "Opening demo viewer...",
+    invoked: "Demo viewer opened",
     html: html,
-    description: "Opens the Nutrient SDK interface",
+    description: "Basic demo viewer - only use when user explicitly asks for demo. Use upload_pdf_viewer for full features.",
     widgetDomain: baseURL,
   };
 
-  // PDF Upload widget - YOUR ORIGINAL WITH TOOLBAR HELPERS ADDED
+  // PDF Upload widget - PRIMARY with theme button added to navbar
   const pdfUploadWidget: ContentWidget = {
     id: "upload_pdf_viewer",
     title: "PDF Upload & Viewer",
@@ -137,7 +137,8 @@ const handler = createMcpHandler(async (server: any) => {
               font-weight: 600;
               letter-spacing: -0.02em;
             }
-            .upload-btn {
+            .navbar-right { display: flex; align-items: center; gap: 12px; }
+            .upload-btn, .theme-btn {
               padding: 8px 16px;
               background: #fff;
               color: #000;
@@ -150,11 +151,59 @@ const handler = createMcpHandler(async (server: any) => {
               align-items: center;
               gap: 8px;
             }
-            .upload-btn:hover { background: #e5e5e5; }
-            .upload-btn:disabled {
-              opacity: 0.5;
-              cursor: not-allowed;
+            .upload-btn:hover, .theme-btn:hover { background: #e5e5e5; }
+            .upload-btn:disabled, .theme-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+            
+            /* Theme Dropdown */
+            .theme-dropdown { position: relative; display: inline-block; }
+            .theme-menu {
+              display: none;
+              position: absolute;
+              top: 100%;
+              right: 0;
+              margin-top: 8px;
+              background: #2a2424;
+              border: 1px solid #3a3434;
+              border-radius: 8px;
+              min-width: 200px;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+              z-index: 1000;
+              overflow: hidden;
             }
+            .theme-menu.show { display: block; }
+            .theme-option {
+              padding: 12px 16px;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              gap: 12px;
+              color: #fff;
+              transition: background 0.15s;
+              border: none;
+              background: none;
+              width: 100%;
+              text-align: left;
+              font-size: 14px;
+            }
+            .theme-option:hover { background: #3a3434; }
+            .theme-option.active { background: #3b82f6; }
+            .theme-option-icon {
+              width: 24px;
+              height: 24px;
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 14px;
+            }
+            .theme-option-icon.light { background: #f5f5f5; color: #333; }
+            .theme-option-icon.dark { background: #1a1a1a; color: #fff; }
+            .theme-option-icon.auto { background: linear-gradient(135deg, #f5f5f5 50%, #1a1a1a 50%); }
+            .theme-option-icon.hc-light { background: #fff; border: 2px solid #000; color: #000; }
+            .theme-option-icon.hc-dark { background: #000; border: 2px solid #fff; color: #fff; }
+            .theme-option-text { flex: 1; }
+            .theme-option-check { color: #3b82f6; font-weight: bold; }
+            
             .upload-section {
               padding: 24px;
               background: #2a2424;
@@ -231,6 +280,54 @@ const handler = createMcpHandler(async (server: any) => {
               <span class="navbar-title">Nutrient</span>
             </div>
             <div class="navbar-right">
+              <!-- Theme Dropdown -->
+              <div class="theme-dropdown">
+                <button class="theme-btn" id="theme-toggle-btn">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="5"/>
+                    <line x1="12" y1="1" x2="12" y2="3"/>
+                    <line x1="12" y1="21" x2="12" y2="23"/>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                    <line x1="1" y1="12" x2="3" y2="12"/>
+                    <line x1="21" y1="12" x2="23" y2="12"/>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                  </svg>
+                  Theme
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                </button>
+                <div class="theme-menu" id="theme-menu">
+                  <button class="theme-option active" data-theme="LIGHT">
+                    <span class="theme-option-icon light">☀️</span>
+                    <span class="theme-option-text">Light</span>
+                    <span class="theme-option-check">✓</span>
+                  </button>
+                  <button class="theme-option" data-theme="DARK">
+                    <span class="theme-option-icon dark">🌙</span>
+                    <span class="theme-option-text">Dark</span>
+                    <span class="theme-option-check"></span>
+                  </button>
+                  <button class="theme-option" data-theme="AUTO">
+                    <span class="theme-option-icon auto">⚙️</span>
+                    <span class="theme-option-text">Auto (System)</span>
+                    <span class="theme-option-check"></span>
+                  </button>
+                  <button class="theme-option" data-theme="HIGH_CONTRAST_LIGHT">
+                    <span class="theme-option-icon hc-light">A</span>
+                    <span class="theme-option-text">High Contrast Light</span>
+                    <span class="theme-option-check"></span>
+                  </button>
+                  <button class="theme-option" data-theme="HIGH_CONTRAST_DARK">
+                    <span class="theme-option-icon hc-dark">A</span>
+                    <span class="theme-option-text">High Contrast Dark</span>
+                    <span class="theme-option-check"></span>
+                  </button>
+                </div>
+              </div>
+              
               <button class="upload-btn" id="navbar-upload-btn">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -262,7 +359,7 @@ const handler = createMcpHandler(async (server: any) => {
                 <li>View and annotate PDF documents</li>
                 <li>Highlight, comment, and draw on documents</li>
                 <li>Office documents auto-convert to PDF</li>
-                <li>All processing in browser (no upload to server)</li>
+                <li>Switch themes: Light, Dark, Auto, High Contrast</li>
               </ul>
             </div>
           </div>
@@ -277,6 +374,9 @@ const handler = createMcpHandler(async (server: any) => {
             (function() {
               let viewerInstance = null;
               let viewerReady = false;
+              let currentTheme = 'LIGHT';
+              let lastLoadedFile = null;
+              
               const uploadArea = document.getElementById('upload-area');
               const fileInput = document.getElementById('file-input');
               const navbarBtn = document.getElementById('navbar-upload-btn');
@@ -285,6 +385,8 @@ const handler = createMcpHandler(async (server: any) => {
               const loadingDiv = document.getElementById('loading');
               const viewerDiv = document.getElementById('viewer');
               const uploadSection = document.getElementById('upload-section');
+              const themeToggleBtn = document.getElementById('theme-toggle-btn');
+              const themeMenu = document.getElementById('theme-menu');
 
               function showError(msg) {
                 console.error('Error:', msg);
@@ -348,6 +450,95 @@ const handler = createMcpHandler(async (server: any) => {
                 }
               }
 
+              // ========== THEME FUNCTIONS ==========
+              function updateThemeMenuUI(selectedTheme) {
+                const options = themeMenu.querySelectorAll('.theme-option');
+                options.forEach(opt => {
+                  const isActive = opt.dataset.theme === selectedTheme;
+                  opt.classList.toggle('active', isActive);
+                  opt.querySelector('.theme-option-check').textContent = isActive ? '✓' : '';
+                });
+              }
+
+              async function applyTheme(themeName) {
+                if (!lastLoadedFile) {
+                  currentTheme = themeName;
+                  updateThemeMenuUI(themeName);
+                  showInfo('Theme set to ' + themeName.replace(/_/g, ' ') + '. Load a document to see it.');
+                  themeMenu.classList.remove('show');
+                  return;
+                }
+
+                showLoading(true);
+                themeMenu.classList.remove('show');
+
+                try {
+                  const PSPDFKit = window.PSPDFKit;
+                  
+                  if (viewerInstance) {
+                    await PSPDFKit.unload(viewerDiv);
+                    viewerInstance = null;
+                  }
+
+                  let themeEnum = PSPDFKit.Theme.LIGHT;
+                  switch (themeName) {
+                    case 'LIGHT': themeEnum = PSPDFKit.Theme.LIGHT; break;
+                    case 'DARK': themeEnum = PSPDFKit.Theme.DARK; break;
+                    case 'AUTO': themeEnum = PSPDFKit.Theme.AUTO; break;
+                    case 'HIGH_CONTRAST_LIGHT': 
+                      themeEnum = PSPDFKit.Theme.HIGH_CONTRAST_LIGHT || PSPDFKit.Theme.LIGHT;
+                      break;
+                    case 'HIGH_CONTRAST_DARK': 
+                      themeEnum = PSPDFKit.Theme.HIGH_CONTRAST_DARK || PSPDFKit.Theme.DARK;
+                      break;
+                  }
+
+                  const fileUrl = URL.createObjectURL(lastLoadedFile);
+                  
+                  viewerInstance = await PSPDFKit.load({
+                    container: viewerDiv,
+                    document: fileUrl,
+                    baseUrl: "https://cdn.cloud.pspdfkit.com/pspdfkit-web@2024.7.0/",
+                    theme: themeEnum,
+                  });
+
+                  window.nutrientViewerInstance = viewerInstance;
+                  currentTheme = themeName;
+                  updateThemeMenuUI(themeName);
+                  
+                  __startWatchingToolOutput();
+                  __startWatchingSelectToolOutput();
+
+                  setTimeout(() => URL.revokeObjectURL(fileUrl), 1000);
+                  showInfo('Theme: ' + themeName.replace(/_/g, ' '));
+                  
+                } catch (error) {
+                  console.error('Theme error:', error);
+                  showError('Failed to apply theme: ' + error.message);
+                } finally {
+                  showLoading(false);
+                }
+              }
+
+              // Theme dropdown toggle
+              themeToggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                themeMenu.classList.toggle('show');
+              });
+
+              document.addEventListener('click', (e) => {
+                if (!themeMenu.contains(e.target) && e.target !== themeToggleBtn) {
+                  themeMenu.classList.remove('show');
+                }
+              });
+
+              themeMenu.querySelectorAll('.theme-option').forEach(option => {
+                option.addEventListener('click', () => {
+                  const theme = option.dataset.theme;
+                  applyTheme(theme);
+                });
+              });
+
               async function loadDocument(file) {
                 if (!viewerReady) {
                   showError('Viewer not ready. Please wait a moment and try again.');
@@ -362,6 +553,7 @@ const handler = createMcpHandler(async (server: any) => {
                 clearMessages();
                 showLoading(true);
                 navbarBtn.disabled = true;
+                lastLoadedFile = file;
 
                 try {
                   console.log('Loading file:', file.name, 'Type:', file.type, 'Size:', file.size);
@@ -374,17 +566,32 @@ const handler = createMcpHandler(async (server: any) => {
                   const fileUrl = URL.createObjectURL(file);
                   console.log('Created blob URL:', fileUrl);
 
+                  // Get theme enum for current theme
+                  const PSPDFKit = window.PSPDFKit;
+                  let themeEnum = PSPDFKit.Theme.LIGHT;
+                  switch (currentTheme) {
+                    case 'DARK': themeEnum = PSPDFKit.Theme.DARK; break;
+                    case 'AUTO': themeEnum = PSPDFKit.Theme.AUTO; break;
+                    case 'HIGH_CONTRAST_LIGHT': 
+                      themeEnum = PSPDFKit.Theme.HIGH_CONTRAST_LIGHT || PSPDFKit.Theme.LIGHT; 
+                      break;
+                    case 'HIGH_CONTRAST_DARK': 
+                      themeEnum = PSPDFKit.Theme.HIGH_CONTRAST_DARK || PSPDFKit.Theme.DARK; 
+                      break;
+                  }
+
                   viewerInstance = await window.PSPDFKit.load({
                     container: viewerDiv,
                     document: fileUrl,
                     baseUrl: "https://cdn.cloud.pspdfkit.com/pspdfkit-web@2024.7.0/",
+                    theme: themeEnum,
                   });
 
                   // Start polling for tool output updates (toolbar + tool selection)
                   __startWatchingToolOutput();
                   __startWatchingSelectToolOutput();
 
-console.log('Document loaded successfully');
+                  console.log('Document loaded successfully');
                   
                   // Expose instance globally for toolbar manipulation
                   window.nutrientViewerInstance = viewerInstance;
@@ -722,16 +929,16 @@ console.log('Document loaded successfully');
     widgetDomain: "https://cdn.cloud.pspdfkit.com",
   };
 
-  // Register resources - YOUR ORIGINAL
+  // Register resources
   server.registerResource(
-    "open-sdk-widget",
-    openSDKWidget.templateUri,
+    "demo-viewer-widget",
+    demoViewerWidget.templateUri,
     {
-      title: openSDKWidget.title,
-      description: openSDKWidget.description,
+      title: demoViewerWidget.title,
+      description: demoViewerWidget.description,
       mimeType: "text/html+skybridge",
       _meta: {
-        "openai/widgetDescription": openSDKWidget.description,
+        "openai/widgetDescription": demoViewerWidget.description,
         "openai/widgetPrefersBorder": false,
       },
     },
@@ -740,11 +947,11 @@ console.log('Document loaded successfully');
         {
           uri: uri.href,
           mimeType: "text/html+skybridge",
-          text: `<html>${openSDKWidget.html}</html>`,
+          text: `<html>${demoViewerWidget.html}</html>`,
           _meta: {
-            "openai/widgetDescription": openSDKWidget.description,
+            "openai/widgetDescription": demoViewerWidget.description,
             "openai/widgetPrefersBorder": false,
-            "openai/widgetDomain": openSDKWidget.widgetDomain,
+            "openai/widgetDomain": demoViewerWidget.widgetDomain,
           },
         },
       ],
@@ -816,35 +1023,12 @@ console.log('Document loaded successfully');
     })
   );
 
-  // Register tools - YOUR ORIGINAL
-  server.registerTool(
-    openSDKWidget.id,
-    {
-      title: openSDKWidget.title,
-      description: "Opens the Nutrient SDK main interface",
-      inputSchema: {},
-      _meta: widgetMeta(openSDKWidget),
-    },
-    async () => {
-      return {
-        content: [{
-          type: "text",
-          text: "Opening Nutrient SDK. You can now view and upload documents.",
-        }],
-        structuredContent: {
-          action: "open_sdk",
-          timestamp: new Date().toISOString(),
-        },
-        _meta: widgetMeta(openSDKWidget),
-      };
-    }
-  );
-
+  // PRIMARY TOOL: PDF Upload & Viewer (registered first)
   server.registerTool(
     pdfUploadWidget.id,
     {
       title: pdfUploadWidget.title,
-      description: "Opens PDF viewer with upload capability. Supports PDF, Office documents (Word, Excel, PowerPoint), and images (PNG, JPG, TIFF).",
+      description: "PRIMARY - Opens PDF viewer with upload capability. Use this by default for opening the app, viewing PDFs, or any document tasks. Supports PDF, Office documents (Word, Excel, PowerPoint), and images (PNG, JPG, TIFF).",
       inputSchema: {
         message: z.string().optional().describe("Optional message to display"),
       },
@@ -867,7 +1051,31 @@ console.log('Document loaded successfully');
     }
   );
 
-  // ========== NEW: TOOLBAR CUSTOMIZATION TOOL ==========
+  // SECONDARY TOOL: Demo Viewer (only when explicitly asked)
+  server.registerTool(
+    demoViewerWidget.id,
+    {
+      title: demoViewerWidget.title,
+      description: "Basic demo viewer - ONLY use when user explicitly asks for 'demo viewer' or 'demo view'. For all other requests use upload_pdf_viewer.",
+      inputSchema: {},
+      _meta: widgetMeta(demoViewerWidget),
+    },
+    async () => {
+      return {
+        content: [{
+          type: "text",
+          text: "Opening demo viewer. Note: For full features including theme switching, use the PDF Upload Viewer instead.",
+        }],
+        structuredContent: {
+          action: "demo_viewer",
+          timestamp: new Date().toISOString(),
+        },
+        _meta: widgetMeta(demoViewerWidget),
+      };
+    }
+  );
+
+  // ========== TOOLBAR CUSTOMIZATION TOOL (UNCHANGED) ==========
   server.registerTool(
     "customize_toolbar",
     {
@@ -926,7 +1134,7 @@ Example: To keep only thumbnails and download, use action "keep_only" with tools
     }
   );
 
-  // ========== NEW: SELECT TOOL (INTERACTION MODE) ==========
+  // ========== SELECT TOOL (UNCHANGED) ==========
   // Returns an intent payload that the widget applies by setting ViewState.interactionMode.
   server.registerTool(
     "select_tool",
