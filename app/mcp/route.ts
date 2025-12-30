@@ -1,6 +1,7 @@
 import { baseURL } from "@/baseUrl";
 import { createMcpHandler } from "mcp-handler";
 import { z } from "zod";
+import { PromptOrchestrator } from "@/lib/PromptOrchestrator";
 
 const getAppsSdkCompatibleHtml = async (baseUrl: string, path: string) => {
   const result = await fetch(`${baseUrl}${path}`);
@@ -91,6 +92,230 @@ const handler = createMcpHandler(async (server: any) => {
     html: html,
     description: "Basic demo viewer - only use when user explicitly asks for demo. Use upload_pdf_viewer for full features.",
     widgetDomain: baseURL,
+  };
+
+  // Global Tool widget - For POC orchestrator
+  const globalToolWidget: ContentWidget = {
+    id: "global_tool",
+    title: "Global Tool Output",
+    templateUri: "ui://widget/global-tool-widget.html",
+    invoking: "Processing your request...",
+    invoked: "Result ready",
+    html: `
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Nutrient Viewer - Global Tool</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+              background: #1a1414;
+              color: #fff;
+              height: 100vh;
+              display: flex;
+              flex-direction: column;
+              overflow: hidden;
+            }
+            .info-panel {
+              background: #2a2424;
+              border-bottom: 1px solid #3a3434;
+              overflow-y: auto;
+              flex-shrink: 0;
+            }
+            .section {
+              border-bottom: 1px solid #3a3434;
+            }
+            .section-header {
+              padding: 12px 16px;
+              background: #1a1414;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              transition: background 0.2s;
+            }
+            .section-header:hover {
+              background: #252020;
+            }
+            .section-title {
+              font-size: 14px;
+              font-weight: 600;
+              color: #3b82f6;
+            }
+            .section-toggle {
+              font-size: 12px;
+              color: #888;
+            }
+            .section-content {
+              padding: 12px 16px;
+              font-size: 13px;
+              line-height: 1.6;
+              white-space: pre-wrap;
+              word-wrap: break-word;
+              color: #ccc;
+              max-height: 150px;
+              overflow-y: auto;
+              display: none;
+            }
+            .section-content.expanded {
+              display: block;
+            }
+            .viewer-container {
+              flex: 1;
+              position: relative;
+              background: #1a1414;
+            }
+            #app {
+              width: 100%;
+              height: 100%;
+            }
+            .loading {
+              padding: 24px;
+              text-align: center;
+              color: #888;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="info-panel">
+            <div class="section" id="section-user">
+              <div class="section-header" onclick="toggleSection('user')">
+                <span class="section-title">📝 User Prompt (Raw)</span>
+                <span class="section-toggle" id="toggle-user">▼</span>
+              </div>
+              <div class="section-content expanded" id="content-user">Loading...</div>
+            </div>
+
+            <div class="section" id="section-enhanced">
+              <div class="section-header" onclick="toggleSection('enhanced')">
+                <span class="section-title">🔧 Enhanced Prompt (Processed)</span>
+                <span class="section-toggle" id="toggle-enhanced">▶</span>
+              </div>
+              <div class="section-content" id="content-enhanced">Loading...</div>
+            </div>
+
+            <div class="section" id="section-response">
+              <div class="section-header" onclick="toggleSection('response')">
+                <span class="section-title">✨ ChatGPT Response</span>
+                <span class="section-toggle" id="toggle-response">▶</span>
+              </div>
+              <div class="section-content" id="content-response">Loading...</div>
+            </div>
+          </div>
+
+          <div class="viewer-container">
+            <div id="app"></div>
+          </div>
+
+          <script src="https://cdn.cloud.pspdfkit.com/pspdfkit-web@1.9.1/nutrient-viewer.js"></script>
+
+          <script>
+            // Toggle section expansion
+            function toggleSection(name) {
+              const content = document.getElementById('content-' + name);
+              const toggle = document.getElementById('toggle-' + name);
+
+              if (content.classList.contains('expanded')) {
+                content.classList.remove('expanded');
+                toggle.textContent = '▶';
+              } else {
+                content.classList.add('expanded');
+                toggle.textContent = '▼';
+              }
+            }
+
+            (function() {
+              const userContent = document.getElementById('content-user');
+              const enhancedContent = document.getElementById('content-enhanced');
+              const responseContent = document.getElementById('content-response');
+              const viewerContainer = document.getElementById('app');
+
+              let lastOutput = null;
+              let viewerInitialized = false;
+
+              // Poll for tool output from window.openai.toolOutput.global_tool
+              function updateDisplay() {
+                const toolOutput = window.openai?.toolOutput?.global_tool;
+                const outputKey = JSON.stringify(toolOutput ?? null);
+
+                if (outputKey !== lastOutput) {
+                  lastOutput = outputKey;
+
+                  if (toolOutput) {
+                    // Update user prompt
+                    userContent.textContent = toolOutput.user_prompt || 'N/A';
+
+                    // Update enhanced prompt
+                    enhancedContent.textContent = toolOutput.enhanced_prompt || 'N/A';
+
+                    // Update response
+                    responseContent.textContent = toolOutput.response_text || 'N/A';
+
+                    // Initialize Nutrient Viewer (once)
+                    if (!viewerInitialized) {
+                      initializeViewer();
+                      viewerInitialized = true;
+                    }
+                  }
+                }
+              }
+
+              // Initialize Nutrient Viewer with demo PDF
+              async function initializeViewer() {
+                try {
+                  await waitForNutrientViewer();
+
+                  const { NutrientViewer } = window;
+
+                  // Unload any existing instance
+                  NutrientViewer.unload(viewerContainer);
+
+                  // Load demo PDF
+                  await NutrientViewer.load({
+                    container: viewerContainer,
+                    document: "https://www.nutrient.io/downloads/nutrient-web-demo.pdf",
+                  });
+
+                  console.log("Nutrient Viewer loaded successfully");
+                } catch (error) {
+                  console.error("Failed to load Nutrient Viewer:", error);
+                }
+              }
+
+              // Wait for NutrientViewer to be available
+              function waitForNutrientViewer() {
+                return new Promise((resolve, reject) => {
+                  let attempts = 0;
+                  const maxAttempts = 50;
+
+                  const check = setInterval(() => {
+                    attempts++;
+                    if (window.NutrientViewer) {
+                      clearInterval(check);
+                      resolve(window.NutrientViewer);
+                    } else if (attempts >= maxAttempts) {
+                      clearInterval(check);
+                      reject(new Error('NutrientViewer failed to load'));
+                    }
+                  }, 100);
+                });
+              }
+
+              // Initial update
+              updateDisplay();
+
+              // Poll every 250ms for updates
+              setInterval(updateDisplay, 250);
+            })();
+          </script>
+        </body>
+      </html>
+    `,
+    description: "Displays user prompt, enhanced prompt, ChatGPT response, and Nutrient viewer",
+    widgetDomain: "https://cdn.cloud.pspdfkit.com",
   };
 
   // PDF Upload widget - PRIMARY with theme button added to navbar
@@ -1023,6 +1248,36 @@ const handler = createMcpHandler(async (server: any) => {
     })
   );
 
+  // Register global tool widget resource
+  server.registerResource(
+    "global-tool-widget",
+    globalToolWidget.templateUri,
+    {
+      title: globalToolWidget.title,
+      description: globalToolWidget.description,
+      mimeType: "text/html+skybridge",
+      _meta: {
+        "openai/widgetDescription": globalToolWidget.description,
+        "openai/widgetPrefersBorder": true,
+        "openai/widgetDomain": "https://cdn.cloud.pspdfkit.com",
+      },
+    },
+    async (uri: any) => ({
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "text/html+skybridge",
+          text: globalToolWidget.html,
+          _meta: {
+            "openai/widgetDescription": globalToolWidget.description,
+            "openai/widgetPrefersBorder": true,
+            "openai/widgetDomain": "https://cdn.cloud.pspdfkit.com",
+          },
+        },
+      ],
+    })
+  );
+
   // PRIMARY TOOL: PDF Upload & Viewer (registered first)
   server.registerTool(
     pdfUploadWidget.id,
@@ -1242,6 +1497,70 @@ Example: To keep only thumbnails and download, use action "keep_only" with tools
         },
         _meta: widgetMeta(pdfUploadWidget),
       };
+    }
+  );
+
+  // ========== GLOBAL TOOL (POC ORCHESTRATOR) ==========
+  // This tool accepts the full user prompt verbatim and orchestrates the complete flow:
+  // user_prompt → prompt_manager → enhanced_prompt → ChatGPT API → response_text
+  server.registerTool(
+    "global_tool",
+    {
+      title: "Global Tool - Orchestrator",
+      description: "Processes user requests through the PromptOrchestrator backend. Takes the full user message, creates an enhanced prompt, calls ChatGPT API, and returns all three values in a widget.",
+      inputSchema: {
+        user_prompt: z.string().describe("The full user message verbatim (100% of what the user typed)"),
+      },
+      _meta: widgetMeta(globalToolWidget),
+    },
+    async (args: { user_prompt: string }) => {
+      const { user_prompt } = args;
+
+      try {
+        // Call the PromptOrchestrator backend module
+        // Flow: user_prompt → prompt_manager → enhanced_prompt → ChatGPT → response_text
+        const result = await PromptOrchestrator({ user_prompt });
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `✅ Processed request\n\n📝 User prompt: "${user_prompt}"\n\n🔧 Response generated successfully`,
+            },
+          ],
+          structuredContent: {
+            // CRITICAL: This nested structure is accessible via window.openai.toolOutput.global_tool
+            global_tool: {
+              user_prompt: result.user_prompt,
+              enhanced_prompt: result.enhanced_prompt,
+              response_text: result.response_text,
+            },
+            timestamp: new Date().toISOString(),
+          },
+          _meta: widgetMeta(globalToolWidget),
+        };
+      } catch (error) {
+        console.error("global_tool error:", error);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ Error processing request: ${error instanceof Error ? error.message : "Unknown error"}`,
+            },
+          ],
+          structuredContent: {
+            global_tool: {
+              user_prompt,
+              enhanced_prompt: "Error: Could not process prompt",
+              response_text: 'console.log("Error - Fallback");',
+            },
+            error: error instanceof Error ? error.message : "Unknown error",
+            timestamp: new Date().toISOString(),
+          },
+          _meta: widgetMeta(globalToolWidget),
+        };
+      }
     }
   );
 });
