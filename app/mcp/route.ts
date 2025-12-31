@@ -94,7 +94,7 @@ const handler = createMcpHandler(async (server: any) => {
     widgetDomain: baseURL,
   };
 
-  // Global Tool widget - For POC orchestrator
+  // Global Tool widget - UPDATED with iframe viewer
   const globalToolWidget: ContentWidget = {
     id: "global_tool",
     title: "Global Tool Output",
@@ -163,19 +163,43 @@ const handler = createMcpHandler(async (server: any) => {
             .section-content.expanded {
               display: block;
             }
-            .viewer-container {
+            .viewer-panel {
               flex: 1;
               position: relative;
               background: #1a1414;
+              display: flex;
+              flex-direction: column;
+              min-height: 0;
             }
-            #app {
+            .viewer-header {
+              padding: 12px 16px;
+              background: #2a2424;
+              border-bottom: 1px solid #3a3434;
+              font-size: 14px;
+              font-weight: 600;
+              color: #3b82f6;
+            }
+            .viewer-container {
+              flex: 1;
+              position: relative;
+              min-height: 0;
+            }
+            #viewer-iframe {
               width: 100%;
               height: 100%;
+              border: none;
+              background: #fff;
             }
-            .loading {
+            .viewer-empty {
               padding: 24px;
               text-align: center;
               color: #888;
+            }
+            .error-display {
+              padding: 12px 16px;
+              background: #ef4444;
+              color: #fff;
+              font-size: 13px;
             }
           </style>
         </head>
@@ -199,18 +223,28 @@ const handler = createMcpHandler(async (server: any) => {
 
             <div class="section" id="section-response">
               <div class="section-header" onclick="toggleSection('response')">
-                <span class="section-title">✨ ChatGPT Response</span>
+                <span class="section-title">✨ LLM Response (Raw)</span>
                 <span class="section-toggle" id="toggle-response">▶</span>
               </div>
               <div class="section-content" id="content-response">Loading...</div>
             </div>
+
+            <div class="section" id="section-meta">
+              <div class="section-header" onclick="toggleSection('meta')">
+                <span class="section-title">⚙️ Metadata</span>
+                <span class="section-toggle" id="toggle-meta">▶</span>
+              </div>
+              <div class="section-content" id="content-meta">Loading...</div>
+            </div>
           </div>
 
-          <div class="viewer-container">
-            <div id="app"></div>
+          <div class="viewer-panel">
+            <div class="viewer-header">🖼️ Live Viewer (Generated)</div>
+            <div id="error-container"></div>
+            <div class="viewer-container" id="viewer-container">
+              <div class="viewer-empty">Waiting for viewer output...</div>
+            </div>
           </div>
-
-          <script src="https://cdn.cloud.pspdfkit.com/pspdfkit-web@1.9.1/nutrient-viewer.js"></script>
 
           <script>
             // Toggle section expansion
@@ -231,7 +265,9 @@ const handler = createMcpHandler(async (server: any) => {
               const userContent = document.getElementById('content-user');
               const enhancedContent = document.getElementById('content-enhanced');
               const responseContent = document.getElementById('content-response');
-              const viewerContainer = document.getElementById('app');
+              const metaContent = document.getElementById('content-meta');
+              const viewerContainer = document.getElementById('viewer-container');
+              const errorContainer = document.getElementById('error-container');
 
               let lastOutput = null;
               let viewerInitialized = false;
@@ -245,63 +281,75 @@ const handler = createMcpHandler(async (server: any) => {
                   lastOutput = outputKey;
 
                   if (toolOutput) {
-                    // Update user prompt
+                    // Update info panels
                     userContent.textContent = toolOutput.user_prompt || 'N/A';
-
-                    // Update enhanced prompt
                     enhancedContent.textContent = toolOutput.enhanced_prompt || 'N/A';
-
-                    // Update response
                     responseContent.textContent = toolOutput.response_text || 'N/A';
 
-                    // Initialize Nutrient Viewer (once)
+                    // Update metadata
+                    const provider = toolOutput.provider || 'unknown';
+                    const modelRequested = toolOutput.model_requested || 'N/A';
+                    const modelUsed = toolOutput.model_used || 'N/A';
+                    const errors = toolOutput.errors || [];
+                    const availableModels = toolOutput.available_models || [];
+
+                    let metaText = 'Provider: ' + provider + '\\n' +
+                                   'Model Requested: ' + modelRequested + '\\n' +
+                                   'Model Used: ' + modelUsed + '\\n' +
+                                   'Errors: ' + (errors.length > 0 ? errors.join(', ') : 'none');
+
+                    if (availableModels.length > 0) {
+                      metaText += '\\n\\nAvailable Models:\\n' + availableModels.join('\\n');
+                    }
+
+                    metaContent.textContent = metaText;
+
+                    // Display errors if any
+                    if (errors.length > 0) {
+                      errorContainer.innerHTML = '<div class="error-display">⚠️ Errors: ' + errors.join('; ') + '</div>';
+                    } else {
+                      errorContainer.innerHTML = '';
+                    }
+
+                    // Initialize viewer with response_html
                     if (!viewerInitialized) {
-                      initializeViewer();
+                      initializeViewer(toolOutput.response_html);
                       viewerInitialized = true;
                     }
                   }
                 }
               }
 
-              // Initialize Nutrient Viewer with demo PDF
-              async function initializeViewer() {
+              // Initialize viewer with sandboxed iframe
+              function initializeViewer(responseHtml) {
                 try {
-                  await waitForNutrientViewer();
+                  if (!responseHtml || responseHtml.trim().length === 0) {
+                    viewerContainer.innerHTML = '<div class="viewer-empty">No runnable viewer output.</div>';
+                    return;
+                  }
 
-                  const { NutrientViewer } = window;
+                  // Validate HTML
+                  const isValidHTML = responseHtml.includes('<!DOCTYPE html') || responseHtml.includes('<html');
 
-                  // Unload any existing instance
-                  NutrientViewer.unload(viewerContainer);
+                  if (!isValidHTML) {
+                    viewerContainer.innerHTML = '<div class="viewer-empty">Invalid HTML format. Expected complete HTML document.</div>';
+                    return;
+                  }
 
-                  // Load demo PDF
-                  await NutrientViewer.load({
-                    container: viewerContainer,
-                    document: "https://www.nutrient.io/downloads/nutrient-web-demo.pdf",
-                  });
+                  // Create sandboxed iframe
+                  const iframe = document.createElement('iframe');
+                  iframe.id = 'viewer-iframe';
+                  iframe.sandbox = 'allow-scripts allow-same-origin';
+                  iframe.srcdoc = responseHtml;
 
-                  console.log("Nutrient Viewer loaded successfully");
+                  viewerContainer.innerHTML = '';
+                  viewerContainer.appendChild(iframe);
+
+                  console.log('Viewer iframe initialized successfully');
                 } catch (error) {
-                  console.error("Failed to load Nutrient Viewer:", error);
+                  console.error('Failed to initialize viewer:', error);
+                  viewerContainer.innerHTML = '<div class="viewer-empty">Error initializing viewer: ' + (error && error.message ? error.message : 'Unknown error') + '</div>';
                 }
-              }
-
-              // Wait for NutrientViewer to be available
-              function waitForNutrientViewer() {
-                return new Promise((resolve, reject) => {
-                  let attempts = 0;
-                  const maxAttempts = 50;
-
-                  const check = setInterval(() => {
-                    attempts++;
-                    if (window.NutrientViewer) {
-                      clearInterval(check);
-                      resolve(window.NutrientViewer);
-                    } else if (attempts >= maxAttempts) {
-                      clearInterval(check);
-                      reject(new Error('NutrientViewer failed to load'));
-                    }
-                  }, 100);
-                });
               }
 
               // Initial update
@@ -314,7 +362,7 @@ const handler = createMcpHandler(async (server: any) => {
         </body>
       </html>
     `,
-    description: "Displays user prompt, enhanced prompt, ChatGPT response, and Nutrient viewer",
+    description: "Displays user prompt, enhanced prompt, LLM response, and live generated viewer",
     widgetDomain: "https://cdn.cloud.pspdfkit.com",
   };
 
@@ -1500,14 +1548,12 @@ Example: To keep only thumbnails and download, use action "keep_only" with tools
     }
   );
 
-  // ========== GLOBAL TOOL (POC ORCHESTRATOR) ==========
-  // This tool accepts the full user prompt verbatim and orchestrates the complete flow:
-  // user_prompt → prompt_manager → enhanced_prompt → ChatGPT API → response_text
+  // ========== GLOBAL TOOL (POC ORCHESTRATOR) - UPDATED ==========
   server.registerTool(
     "global_tool",
     {
       title: "Global Tool - Orchestrator",
-      description: "Processes user requests through the PromptOrchestrator backend. Takes the full user message, creates an enhanced prompt, calls ChatGPT API, and returns all three values in a widget.",
+      description: "Processes user requests through the PromptOrchestrator backend. Takes the full user message, creates an enhanced prompt, calls LLM API (Claude/OpenAI), and returns all values including a live viewer in the widget.",
       inputSchema: {
         user_prompt: z.string().describe("The full user message verbatim (100% of what the user typed)"),
       },
@@ -1518,22 +1564,26 @@ Example: To keep only thumbnails and download, use action "keep_only" with tools
 
       try {
         // Call the PromptOrchestrator backend module
-        // Flow: user_prompt → prompt_manager → enhanced_prompt → ChatGPT → response_text
         const result = await PromptOrchestrator({ user_prompt });
 
         return {
           content: [
             {
               type: "text",
-              text: `✅ Processed request\n\n📝 User prompt: "${user_prompt}"\n\n🔧 Response generated successfully`,
+              text: `✅ Processed request using ${result.provider} (${result.model_used})\n\n📝 User prompt: "${user_prompt}"\n\n${result.errors.length > 0 ? "⚠️ Errors: " + result.errors.join("; ") : "✨ Response generated successfully"}`,
             },
           ],
           structuredContent: {
-            // CRITICAL: This nested structure is accessible via window.openai.toolOutput.global_tool
             global_tool: {
               user_prompt: result.user_prompt,
               enhanced_prompt: result.enhanced_prompt,
+              provider: result.provider,
+              model_requested: result.model_requested,
+              model_used: result.model_used,
               response_text: result.response_text,
+              response_html: result.response_html,
+              errors: result.errors,
+              available_models: result.available_models,
             },
             timestamp: new Date().toISOString(),
           },
@@ -1542,20 +1592,26 @@ Example: To keep only thumbnails and download, use action "keep_only" with tools
       } catch (error) {
         console.error("global_tool error:", error);
 
+        const errorMsg = error instanceof Error ? error.message : "Unknown error";
+
         return {
           content: [
             {
               type: "text",
-              text: `❌ Error processing request: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: `❌ Error processing request: ${errorMsg}`,
             },
           ],
           structuredContent: {
             global_tool: {
               user_prompt,
               enhanced_prompt: "Error: Could not process prompt",
-              response_text: 'console.log("Error - Fallback");',
+              provider: "unknown" as "anthropic" | "openai",
+              model_requested: "N/A",
+              model_used: "N/A",
+              response_text: errorMsg,
+              response_html: `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Error</title><style>body{font-family:sans-serif;padding:24px;background:#1a1414;color:#fff;}h2{color:#ef4444;}</style></head><body><h2>⚠️ Error</h2><p>${errorMsg.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p></body></html>`,
+              errors: [errorMsg],
             },
-            error: error instanceof Error ? error.message : "Unknown error",
             timestamp: new Date().toISOString(),
           },
           _meta: widgetMeta(globalToolWidget),
