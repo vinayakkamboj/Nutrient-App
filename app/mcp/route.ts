@@ -166,74 +166,24 @@ const handler = createMcpHandler(async (server: any) => {
               background: #1a1414;
               color: #fff;
               height: 100vh;
-              display: flex;
-              flex-direction: column;
               overflow: hidden;
-            }
-            .info-panel {
-              background: #2a2424;
-              border-bottom: 1px solid #3a3434;
-              overflow-y: auto;
-              flex-shrink: 0;
-            }
-            .section {
-              border-bottom: 1px solid #3a3434;
-            }
-            .section-header {
-              padding: 12px 16px;
-              background: #1a1414;
-              cursor: pointer;
-              display: flex;
-              align-items: center;
-              justify-content: space-between;
-              transition: background 0.2s;
-            }
-            .section-header:hover {
-              background: #252020;
-            }
-            .section-title {
-              font-size: 14px;
-              font-weight: 600;
-              color: #3b82f6;
-            }
-            .section-toggle {
-              font-size: 12px;
-              color: #888;
-            }
-            .section-content {
-              padding: 12px 16px;
-              font-size: 13px;
-              line-height: 1.6;
-              white-space: pre-wrap;
-              word-wrap: break-word;
-              color: #ccc;
-              max-height: 150px;
-              overflow-y: auto;
-              display: none;
-            }
-            .section-content.expanded {
-              display: block;
-            }
-            .viewer-panel {
-              flex: 1;
               position: relative;
-              background: #1a1414;
+            }
+
+            /* Viewer Panel - Full Screen */
+            .viewer-panel {
+              position: absolute;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
               display: flex;
               flex-direction: column;
-              min-height: 0;
-            }
-            .viewer-header {
-              padding: 12px 16px;
-              background: #2a2424;
-              border-bottom: 1px solid #3a3434;
-              font-size: 14px;
-              font-weight: 600;
-              color: #3b82f6;
             }
             .viewer-container {
               flex: 1;
               position: relative;
-              min-height: 0;
+              background: #fff;
             }
             #viewer-iframe {
               width: 100%;
@@ -245,68 +195,322 @@ const handler = createMcpHandler(async (server: any) => {
               padding: 24px;
               text-align: center;
               color: #888;
+              background: #1a1414;
+              height: 100%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 14px;
             }
-            .error-display {
-              padding: 12px 16px;
-              background: #ef4444;
-              color: #fff;
+
+            /* Loading Overlay */
+            .loading-overlay {
+              position: absolute;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              background: rgba(26, 20, 20, 0.97);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              z-index: 1000;
+              transition: opacity 0.3s ease;
+            }
+            .loading-overlay.hidden {
+              opacity: 0;
+              pointer-events: none;
+            }
+            .loading-content {
+              text-align: center;
+              max-width: 320px;
+            }
+
+            /* Spinner */
+            .spinner {
+              width: 40px;
+              height: 40px;
+              margin: 0 auto 24px;
+              border: 3px solid rgba(59, 130, 246, 0.2);
+              border-top-color: #3b82f6;
+              border-radius: 50%;
+              animation: spin 0.8s linear infinite;
+            }
+            @keyframes spin {
+              to { transform: rotate(360deg); }
+            }
+
+            /* Status List */
+            .status-list {
+              background: rgba(42, 36, 36, 0.6);
+              border: 1px solid #3a3434;
+              border-radius: 8px;
+              padding: 16px 20px;
+              text-align: left;
+            }
+            .status-item {
+              display: flex;
+              align-items: center;
               font-size: 13px;
+              line-height: 1.8;
+              color: #999;
+              transition: color 0.2s ease;
+            }
+            .status-item.completed {
+              color: #10b981;
+            }
+            .status-item.active {
+              color: #f59e0b;
+            }
+            .status-icon {
+              width: 16px;
+              margin-right: 10px;
+              font-size: 12px;
+              text-align: center;
+            }
+
+            /* Details Button */
+            .details-button {
+              position: fixed;
+              bottom: 20px;
+              right: 20px;
+              background: rgba(42, 36, 36, 0.95);
+              border: 1px solid #3a3434;
+              border-radius: 8px;
+              padding: 10px 18px;
+              color: #3b82f6;
+              font-size: 13px;
+              font-weight: 500;
+              cursor: pointer;
+              transition: all 0.2s ease;
+              z-index: 900;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            }
+            .details-button:hover {
+              background: rgba(58, 52, 52, 0.95);
+              transform: translateY(-1px);
+              box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            }
+            .details-button.hidden {
+              display: none;
+            }
+
+            /* Details Drawer */
+            .details-drawer {
+              position: fixed;
+              top: 0;
+              right: 0;
+              width: 420px;
+              max-width: 90vw;
+              height: 100vh;
+              background: #2a2424;
+              border-left: 1px solid #3a3434;
+              transform: translateX(100%);
+              transition: transform 0.3s ease;
+              z-index: 950;
+              overflow-y: auto;
+              box-shadow: -4px 0 16px rgba(0, 0, 0, 0.5);
+            }
+            .details-drawer.open {
+              transform: translateX(0);
+            }
+
+            /* Drawer Header */
+            .drawer-header {
+              position: sticky;
+              top: 0;
+              background: #1a1414;
+              padding: 16px 20px;
+              border-bottom: 1px solid #3a3434;
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              z-index: 10;
+            }
+            .drawer-title {
+              font-size: 15px;
+              font-weight: 600;
+              color: #3b82f6;
+            }
+            .drawer-close {
+              background: transparent;
+              border: none;
+              color: #888;
+              font-size: 20px;
+              cursor: pointer;
+              padding: 4px 8px;
+              line-height: 1;
+              transition: color 0.2s ease;
+            }
+            .drawer-close:hover {
+              color: #fff;
+            }
+
+            /* Drawer Section */
+            .drawer-section {
+              border-bottom: 1px solid #3a3434;
+            }
+            .drawer-section-header {
+              padding: 14px 20px;
+              background: #252020;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              transition: background 0.2s;
+            }
+            .drawer-section-header:hover {
+              background: #2d2727;
+            }
+            .drawer-section-title {
+              font-size: 13px;
+              font-weight: 600;
+              color: #ccc;
+            }
+            .drawer-section-toggle {
+              font-size: 11px;
+              color: #666;
+            }
+            .drawer-section-content {
+              padding: 14px 20px;
+              font-size: 12px;
+              line-height: 1.6;
+              white-space: pre-wrap;
+              word-wrap: break-word;
+              color: #999;
+              max-height: 200px;
+              overflow-y: auto;
+              display: none;
+              background: #1a1414;
+            }
+            .drawer-section-content.expanded {
+              display: block;
+            }
+
+            /* Error/Warning Displays */
+            .error-display {
+              padding: 12px 20px;
+              background: #7f1d1d;
+              color: #fca5a5;
+              font-size: 12px;
+              border-bottom: 1px solid #991b1b;
             }
             .warning-display {
-              padding: 12px 16px;
-              background: #f59e0b;
-              color: #fff;
-              font-size: 13px;
+              padding: 12px 20px;
+              background: #78350f;
+              color: #fcd34d;
+              font-size: 12px;
+              border-bottom: 1px solid #92400e;
+            }
+
+            /* Custom Scrollbar */
+            .drawer-section-content::-webkit-scrollbar,
+            .details-drawer::-webkit-scrollbar {
+              width: 6px;
+            }
+            .drawer-section-content::-webkit-scrollbar-track,
+            .details-drawer::-webkit-scrollbar-track {
+              background: #1a1414;
+            }
+            .drawer-section-content::-webkit-scrollbar-thumb,
+            .details-drawer::-webkit-scrollbar-thumb {
+              background: #3a3434;
+              border-radius: 3px;
             }
           </style>
         </head>
         <body>
-          <div class="info-panel">
-            <div class="section" id="section-user">
-              <div class="section-header" onclick="toggleSection('user')">
-                <span class="section-title">📝 User Prompt (Raw)</span>
-                <span class="section-toggle" id="toggle-user">▼</span>
-              </div>
-              <div class="section-content expanded" id="content-user">Loading...</div>
-            </div>
-
-            <div class="section" id="section-enhanced">
-              <div class="section-header" onclick="toggleSection('enhanced')">
-                <span class="section-title">🔧 Enhanced Prompt (Processed)</span>
-                <span class="section-toggle" id="toggle-enhanced">▶</span>
-              </div>
-              <div class="section-content" id="content-enhanced">Loading...</div>
-            </div>
-
-            <div class="section" id="section-response">
-              <div class="section-header" onclick="toggleSection('response')">
-                <span class="section-title">✨ LLM Response (Raw)</span>
-                <span class="section-toggle" id="toggle-response">▶</span>
-              </div>
-              <div class="section-content" id="content-response">Loading...</div>
-            </div>
-
-            <div class="section" id="section-meta">
-              <div class="section-header" onclick="toggleSection('meta')">
-                <span class="section-title">⚙️ Metadata</span>
-                <span class="section-toggle" id="toggle-meta">▶</span>
-              </div>
-              <div class="section-content" id="content-meta">Loading...</div>
+          <!-- Viewer Panel (Full Screen) -->
+          <div class="viewer-panel">
+            <div class="viewer-container" id="viewer-container">
+              <div class="viewer-empty">Initializing viewer...</div>
             </div>
           </div>
 
-          <div class="viewer-panel">
-            <div class="viewer-header">🖼️ Live Viewer (Generated)</div>
+          <!-- Loading Overlay -->
+          <div class="loading-overlay" id="loading-overlay">
+            <div class="loading-content">
+              <div class="spinner"></div>
+              <div class="status-list" id="status-list">
+                <div class="status-item" id="status-1">
+                  <span class="status-icon">⋯</span>
+                  <span>Captured prompt</span>
+                </div>
+                <div class="status-item" id="status-2">
+                  <span class="status-icon">⋯</span>
+                  <span>Enhancing prompt</span>
+                </div>
+                <div class="status-item" id="status-3">
+                  <span class="status-icon">⋯</span>
+                  <span>Calling LLM</span>
+                </div>
+                <div class="status-item" id="status-4">
+                  <span class="status-icon">⋯</span>
+                  <span>Preparing viewer</span>
+                </div>
+                <div class="status-item" id="status-5">
+                  <span class="status-icon">⋯</span>
+                  <span>Rendering viewer</span>
+                </div>
+                <div class="status-item" id="status-6">
+                  <span class="status-icon">⋯</span>
+                  <span>Ready</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Details Button -->
+          <button class="details-button hidden" id="details-button">
+            Details
+          </button>
+
+          <!-- Details Drawer -->
+          <div class="details-drawer" id="details-drawer">
+            <div class="drawer-header">
+              <span class="drawer-title">Debug Details</span>
+              <button class="drawer-close" id="drawer-close">×</button>
+            </div>
+
             <div id="error-container"></div>
             <div id="warning-container"></div>
-            <div class="viewer-container" id="viewer-container">
-              <div class="viewer-empty">Waiting for viewer output...</div>
+
+            <div class="drawer-section">
+              <div class="drawer-section-header" onclick="toggleDrawerSection('user')">
+                <span class="drawer-section-title">User Prompt</span>
+                <span class="drawer-section-toggle" id="toggle-user">▶</span>
+              </div>
+              <div class="drawer-section-content" id="content-user">Loading...</div>
+            </div>
+
+            <div class="drawer-section">
+              <div class="drawer-section-header" onclick="toggleDrawerSection('enhanced')">
+                <span class="drawer-section-title">Enhanced Prompt</span>
+                <span class="drawer-section-toggle" id="toggle-enhanced">▶</span>
+              </div>
+              <div class="drawer-section-content" id="content-enhanced">Loading...</div>
+            </div>
+
+            <div class="drawer-section">
+              <div class="drawer-section-header" onclick="toggleDrawerSection('response')">
+                <span class="drawer-section-title">LLM Response</span>
+                <span class="drawer-section-toggle" id="toggle-response">▶</span>
+              </div>
+              <div class="drawer-section-content" id="content-response">Loading...</div>
+            </div>
+
+            <div class="drawer-section">
+              <div class="drawer-section-header" onclick="toggleDrawerSection('meta')">
+                <span class="drawer-section-title">Metadata</span>
+                <span class="drawer-section-toggle" id="toggle-meta">▶</span>
+              </div>
+              <div class="drawer-section-content" id="content-meta">Loading...</div>
             </div>
           </div>
 
           <script>
-            // Toggle section expansion
-            function toggleSection(name) {
+            // Toggle drawer section expansion
+            function toggleDrawerSection(name) {
               const content = document.getElementById('content-' + name);
               const toggle = document.getElementById('toggle-' + name);
 
@@ -320,6 +524,7 @@ const handler = createMcpHandler(async (server: any) => {
             }
 
             (function() {
+              // Element references
               const userContent = document.getElementById('content-user');
               const enhancedContent = document.getElementById('content-enhanced');
               const responseContent = document.getElementById('content-response');
@@ -327,11 +532,111 @@ const handler = createMcpHandler(async (server: any) => {
               const viewerContainer = document.getElementById('viewer-container');
               const errorContainer = document.getElementById('error-container');
               const warningContainer = document.getElementById('warning-container');
+              const loadingOverlay = document.getElementById('loading-overlay');
+              const detailsButton = document.getElementById('details-button');
+              const detailsDrawer = document.getElementById('details-drawer');
+              const drawerClose = document.getElementById('drawer-close');
 
+              // Status tracking
               let lastOutput = null;
               let viewerInitialized = false;
+              let statusSteps = {
+                captured: false,
+                enhanced: false,
+                calling: false,
+                preparing: false,
+                rendering: false,
+                ready: false
+              };
 
-              // Poll for tool output from window.openai.toolOutput.global_tool
+              // Details drawer toggle
+              detailsButton.addEventListener('click', function() {
+                detailsDrawer.classList.add('open');
+              });
+
+              drawerClose.addEventListener('click', function() {
+                detailsDrawer.classList.remove('open');
+              });
+
+              // Update status steps
+              function updateStatusSteps(toolOutput) {
+                let allReady = false;
+
+                // Step 1: Captured prompt
+                if (toolOutput.user_prompt && !statusSteps.captured) {
+                  statusSteps.captured = true;
+                  updateStatusUI(1, 'completed');
+                }
+
+                // Step 2: Enhanced prompt
+                if (toolOutput.enhanced_prompt && !statusSteps.enhanced) {
+                  statusSteps.enhanced = true;
+                  updateStatusUI(2, 'completed');
+                }
+
+                // Step 3: Calling LLM
+                if ((toolOutput.provider || toolOutput.model_requested) && !statusSteps.calling) {
+                  statusSteps.calling = true;
+                  updateStatusUI(3, 'active');
+                }
+                if (toolOutput.response_text && statusSteps.calling) {
+                  updateStatusUI(3, 'completed');
+                }
+
+                // Step 4: Preparing viewer
+                if (toolOutput.response_text && !statusSteps.preparing) {
+                  statusSteps.preparing = true;
+                  updateStatusUI(4, 'active');
+                }
+                if (toolOutput.response_html && statusSteps.preparing) {
+                  statusSteps.preparing = true;
+                  updateStatusUI(4, 'completed');
+                }
+
+                // Step 5: Rendering viewer
+                if (toolOutput.response_html && !statusSteps.rendering) {
+                  statusSteps.rendering = true;
+                  updateStatusUI(5, 'active');
+                }
+
+                // Step 6: Ready (when viewer is initialized)
+                if (viewerInitialized && !statusSteps.ready) {
+                  statusSteps.ready = true;
+                  updateStatusUI(5, 'completed');
+                  updateStatusUI(6, 'completed');
+                  allReady = true;
+                }
+
+                // Hide loading overlay when ready
+                if (allReady) {
+                  setTimeout(function() {
+                    loadingOverlay.classList.add('hidden');
+                    detailsButton.classList.remove('hidden');
+                  }, 400);
+                }
+              }
+
+              // Update status UI
+              function updateStatusUI(stepNumber, state) {
+                const statusItem = document.getElementById('status-' + stepNumber);
+                if (!statusItem) return;
+
+                const icon = statusItem.querySelector('.status-icon');
+
+                statusItem.classList.remove('completed', 'active');
+
+                if (state === 'completed') {
+                  statusItem.classList.add('completed');
+                  icon.textContent = '✓';
+                } else if (state === 'active') {
+                  statusItem.classList.add('active');
+                  icon.textContent = '→';
+                } else {
+                  icon.textContent = '⋯';
+                }
+              }
+
+              // Poll for tool output
               function updateDisplay() {
                 const toolOutput = window.openai?.toolOutput?.global_tool;
                 const outputKey = JSON.stringify(toolOutput ?? null);
@@ -379,10 +684,14 @@ const handler = createMcpHandler(async (server: any) => {
                       warningContainer.innerHTML = '';
                     }
 
+                    // Update status steps
+                    updateStatusSteps(toolOutput);
+
                     // Initialize viewer with response_html
-                    if (!viewerInitialized) {
+                    if (!viewerInitialized && toolOutput.response_html) {
                       initializeViewer(toolOutput.response_html);
                       viewerInitialized = true;
+                      updateStatusSteps(toolOutput);
                     }
                   }
                 }
@@ -392,7 +701,7 @@ const handler = createMcpHandler(async (server: any) => {
               function initializeViewer(responseHtml) {
                 try {
                   if (!responseHtml || responseHtml.trim().length === 0) {
-                    viewerContainer.innerHTML = '<div class="viewer-empty">No runnable viewer output.</div>';
+                    viewerContainer.innerHTML = '<div class="viewer-empty">No viewer output available.</div>';
                     return;
                   }
 
