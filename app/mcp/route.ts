@@ -619,16 +619,18 @@ const handler = createMcpHandler(async (server: any) => {
                       warningContainer.innerHTML = '';
                     }
 
-                    // Update status steps
-                    updateStatusSteps(toolOutput);
-
                     // Initialize viewer with response_html
                     if (!viewerInitialized && toolOutput.response_html) {
                       initializeViewer(toolOutput.response_html);
                       viewerInitialized = true;
-                      updateStatusSteps(toolOutput);
                     }
                   }
+                }
+
+                // Always check status (even if data hasn't changed)
+                // This ensures we detect when viewerInitialized becomes true
+                if (toolOutput) {
+                  updateStatusSteps(toolOutput);
                 }
               }
 
