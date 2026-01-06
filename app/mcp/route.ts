@@ -240,33 +240,13 @@ const handler = createMcpHandler(async (server: any) => {
               to { transform: rotate(360deg); }
             }
 
-            /* Status List */
-            .status-list {
-              background: rgba(42, 36, 36, 0.6);
-              border: 1px solid #3a3434;
-              border-radius: 8px;
-              padding: 16px 20px;
-              text-align: left;
-            }
-            .status-item {
-              display: flex;
-              align-items: center;
-              font-size: 13px;
-              line-height: 1.8;
-              color: #999;
-              transition: color 0.2s ease;
-            }
-            .status-item.completed {
-              color: #10b981;
-            }
-            .status-item.active {
-              color: #f59e0b;
-            }
-            .status-icon {
-              width: 16px;
-              margin-right: 10px;
-              font-size: 12px;
+            /* Status Text */
+            .status-text {
               text-align: center;
+              font-size: 14px;
+              color: #ccc;
+              transition: opacity 0.3s ease;
+              min-height: 20px;
             }
 
             /* Details Button */
@@ -278,7 +258,7 @@ const handler = createMcpHandler(async (server: any) => {
               border: 1px solid #3a3434;
               border-radius: 8px;
               padding: 10px 18px;
-              color: #3b82f6;
+              color: #fff;
               font-size: 13px;
               font-weight: 500;
               cursor: pointer;
@@ -431,32 +411,7 @@ const handler = createMcpHandler(async (server: any) => {
           <div class="loading-overlay" id="loading-overlay">
             <div class="loading-content">
               <div class="spinner"></div>
-              <div class="status-list" id="status-list">
-                <div class="status-item" id="status-1">
-                  <span class="status-icon">⋯</span>
-                  <span>Captured prompt</span>
-                </div>
-                <div class="status-item" id="status-2">
-                  <span class="status-icon">⋯</span>
-                  <span>Enhancing prompt</span>
-                </div>
-                <div class="status-item" id="status-3">
-                  <span class="status-icon">⋯</span>
-                  <span>Calling LLM</span>
-                </div>
-                <div class="status-item" id="status-4">
-                  <span class="status-icon">⋯</span>
-                  <span>Preparing viewer</span>
-                </div>
-                <div class="status-item" id="status-5">
-                  <span class="status-icon">⋯</span>
-                  <span>Rendering viewer</span>
-                </div>
-                <div class="status-item" id="status-6">
-                  <span class="status-icon">⋯</span>
-                  <span>Ready</span>
-                </div>
-              </div>
+              <div class="status-text" id="status-text">Initializing...</div>
             </div>
           </div>
 
@@ -536,10 +491,14 @@ const handler = createMcpHandler(async (server: any) => {
               const detailsButton = document.getElementById('details-button');
               const detailsDrawer = document.getElementById('details-drawer');
               const drawerClose = document.getElementById('drawer-close');
+              const statusText = document.getElementById('status-text');
 
               // Status tracking
               let lastOutput = null;
               let viewerInitialized = false;
+              let currentStatusText = '';
+              let statusCycleIndex = 0;
+              let statusCycleInterval = null;
               let statusSteps = {
                 captured: false,
                 enhanced: false,
@@ -548,6 +507,14 @@ const handler = createMcpHandler(async (server: any) => {
                 rendering: false,
                 ready: false
               };
+
+              // Loading messages to cycle through
+              const loadingMessages = [
+                'Initializing...',
+                'Enhancing prompt...',
+                'Waiting for LLM response...',
+                'Processing...'
+              ];
 
               // Details drawer toggle
               detailsButton.addEventListener('click', function() {
@@ -558,81 +525,49 @@ const handler = createMcpHandler(async (server: any) => {
                 detailsDrawer.classList.remove('open');
               });
 
+              // Update status text with fade effect
+              function updateStatusText(newText) {
+                if (currentStatusText === newText) return;
+
+                currentStatusText = newText;
+                statusText.style.opacity = '0';
+
+                setTimeout(function() {
+                  statusText.textContent = newText;
+                  statusText.style.opacity = '1';
+                }, 150);
+              }
+
+              // Cycle through loading messages
+              function cycleStatusMessages() {
+                updateStatusText(loadingMessages[statusCycleIndex]);
+                statusCycleIndex = (statusCycleIndex + 1) % loadingMessages.length;
+              }
+
+              // Start status cycling (every 2 seconds)
+              statusCycleInterval = setInterval(cycleStatusMessages, 2000);
+              cycleStatusMessages(); // Show first message immediately
+
               // Update status steps
               function updateStatusSteps(toolOutput) {
-                let allReady = false;
-
-                // Step 1: Captured prompt
-                if (toolOutput.user_prompt && !statusSteps.captured) {
-                  statusSteps.captured = true;
-                  updateStatusUI(1, 'completed');
-                }
-
-                // Step 2: Enhanced prompt
-                if (toolOutput.enhanced_prompt && !statusSteps.enhanced) {
-                  statusSteps.enhanced = true;
-                  updateStatusUI(2, 'completed');
-                }
-
-                // Step 3: Calling LLM
-                if ((toolOutput.provider || toolOutput.model_requested) && !statusSteps.calling) {
-                  statusSteps.calling = true;
-                  updateStatusUI(3, 'active');
-                }
-                if (toolOutput.response_text && statusSteps.calling) {
-                  updateStatusUI(3, 'completed');
-                }
-
-                // Step 4: Preparing viewer
-                if (toolOutput.response_text && !statusSteps.preparing) {
-                  statusSteps.preparing = true;
-                  updateStatusUI(4, 'active');
-                }
-                if (toolOutput.response_html && statusSteps.preparing) {
-                  statusSteps.preparing = true;
-                  updateStatusUI(4, 'completed');
-                }
-
-                // Step 5: Rendering viewer
-                if (toolOutput.response_html && !statusSteps.rendering) {
-                  statusSteps.rendering = true;
-                  updateStatusUI(5, 'active');
-                }
-
-                // Step 6: Ready (when viewer is initialized)
+                // Check if viewer is ready
                 if (viewerInitialized && !statusSteps.ready) {
                   statusSteps.ready = true;
-                  updateStatusUI(5, 'completed');
-                  updateStatusUI(6, 'completed');
-                  allReady = true;
-                }
 
-                // Hide loading overlay when ready
-                if (allReady) {
+                  // Stop cycling messages
+                  if (statusCycleInterval) {
+                    clearInterval(statusCycleInterval);
+                    statusCycleInterval = null;
+                  }
+
+                  // Show final message
+                  updateStatusText('Ready');
+
+                  // Hide loading overlay
                   setTimeout(function() {
                     loadingOverlay.classList.add('hidden');
                     detailsButton.classList.remove('hidden');
-                  }, 400);
-                }
-              }
-
-              // Update status UI
-              function updateStatusUI(stepNumber, state) {
-                const statusItem = document.getElementById('status-' + stepNumber);
-                if (!statusItem) return;
-
-                const icon = statusItem.querySelector('.status-icon');
-
-                statusItem.classList.remove('completed', 'active');
-
-                if (state === 'completed') {
-                  statusItem.classList.add('completed');
-                  icon.textContent = '✓';
-                } else if (state === 'active') {
-                  statusItem.classList.add('active');
-                  icon.textContent = '→';
-                } else {
-                  icon.textContent = '⋯';
+                  }, 600);
                 }
               }
 
