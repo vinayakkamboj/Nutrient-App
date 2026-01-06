@@ -3,10 +3,26 @@ import { createMcpHandler } from "mcp-handler";
 import { z } from "zod";
 import { PromptOrchestrator } from "@/lib/PromptOrchestrator";
 
-const getAppsSdkCompatibleHtml = async (baseUrl: string, path: string) => {
-  const result = await fetch(`${baseUrl}${path}`);
-  return await result.text();
-};
+// Configure Next.js route to allow longer execution time (max 60 seconds for ChatGPT compatibility)
+export const maxDuration = 50; // 50 seconds max (leaves 10s buffer for ChatGPT's 60s timeout)
+
+/**
+ * Timing logger for performance debugging
+ * Tracks how long each phase of MCP request takes
+ */
+function logTiming(label: string, startTime: number) {
+  const elapsed = Date.now() - startTime;
+  console.log(`[MCP Timing] ${label}: ${elapsed}ms`);
+  return Date.now();
+}
+
+/**
+ * REMOVED: getAppsSdkCompatibleHtml
+ * Reason: Dynamic fetch during MCP init caused 60s+ hangs, breaking ChatGPT's "Reload actions"
+ * Solution: Use static HTML embedded directly in widget definitions
+ * Apps SDK Requirement: Widget HTML must be served via server.registerResource with
+ * mimeType "text/html+skybridge" and referenced via _meta["openai/outputTemplate"]
+ */
 
 type ContentWidget = {
   id: string;
@@ -80,7 +96,42 @@ function normalizeToolName(name: string): string {
 // Note: Some versions of the MCP server typings don't include `registerTool` / `registerResource`.
 // Runtime supports them (as used elsewhere in this file), so we type `server` as `any` to avoid TS errors.
 const handler = createMcpHandler(async (server: any) => {
-  const html = await getAppsSdkCompatibleHtml(baseURL, "/");
+  const startTime = Date.now();
+  let timing = startTime;
+
+  // Static demo viewer HTML (embedded to avoid blocking fetch during MCP init)
+  // Apps SDK Requirement: Fast /mcp response (<1s) for action reload to work
+  const staticDemoViewerHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nutrient Demo Viewer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; }
+    #viewer { flex: 1; width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="viewer"></div>
+  <script src="https://cdn.cloud.pspdfkit.com/pspdfkit-web@1.10.0/nutrient-viewer.js"></script>
+  <script>
+    window.addEventListener("DOMContentLoaded", () => {
+      const container = document.getElementById("viewer");
+      if (window.NutrientViewer && container) {
+        window.NutrientViewer.unload(container);
+        window.NutrientViewer.load({
+          container: container,
+          document: "https://www.nutrient.io/downloads/nutrient-web-demo.pdf",
+        });
+      }
+    });
+  </script>
+</body>
+</html>`;
+
+  timing = logTiming("Static HTML prepared", timing);
 
   // Demo Viewer Widget - RENAMED from open_sdk, lower priority
   const demoViewerWidget: ContentWidget = {
@@ -89,7 +140,7 @@ const handler = createMcpHandler(async (server: any) => {
     templateUri: "ui://widget/demo-viewer.html",
     invoking: "Opening demo viewer...",
     invoked: "Demo viewer opened",
-    html: html,
+    html: staticDemoViewerHTML,
     description: "Basic demo viewer - only use when user explicitly asks for demo. Use upload_pdf_viewer for full features.",
     widgetDomain: baseURL,
   };
@@ -201,6 +252,12 @@ const handler = createMcpHandler(async (server: any) => {
               color: #fff;
               font-size: 13px;
             }
+            .warning-display {
+              padding: 12px 16px;
+              background: #f59e0b;
+              color: #fff;
+              font-size: 13px;
+            }
           </style>
         </head>
         <body>
@@ -241,6 +298,7 @@ const handler = createMcpHandler(async (server: any) => {
           <div class="viewer-panel">
             <div class="viewer-header">🖼️ Live Viewer (Generated)</div>
             <div id="error-container"></div>
+            <div id="warning-container"></div>
             <div class="viewer-container" id="viewer-container">
               <div class="viewer-empty">Waiting for viewer output...</div>
             </div>
@@ -268,6 +326,7 @@ const handler = createMcpHandler(async (server: any) => {
               const metaContent = document.getElementById('content-meta');
               const viewerContainer = document.getElementById('viewer-container');
               const errorContainer = document.getElementById('error-container');
+              const warningContainer = document.getElementById('warning-container');
 
               let lastOutput = null;
               let viewerInitialized = false;
@@ -291,12 +350,14 @@ const handler = createMcpHandler(async (server: any) => {
                     const modelRequested = toolOutput.model_requested || 'N/A';
                     const modelUsed = toolOutput.model_used || 'N/A';
                     const errors = toolOutput.errors || [];
+                    const warnings = toolOutput.warnings || [];
                     const availableModels = toolOutput.available_models || [];
 
                     let metaText = 'Provider: ' + provider + '\\n' +
                                    'Model Requested: ' + modelRequested + '\\n' +
                                    'Model Used: ' + modelUsed + '\\n' +
-                                   'Errors: ' + (errors.length > 0 ? errors.join(', ') : 'none');
+                                   'Errors: ' + (errors.length > 0 ? errors.join(', ') : 'none') + '\\n' +
+                                   'Warnings: ' + (warnings.length > 0 ? warnings.join(', ') : 'none');
 
                     if (availableModels.length > 0) {
                       metaText += '\\n\\nAvailable Models:\\n' + availableModels.join('\\n');
@@ -309,6 +370,13 @@ const handler = createMcpHandler(async (server: any) => {
                       errorContainer.innerHTML = '<div class="error-display">⚠️ Errors: ' + errors.join('; ') + '</div>';
                     } else {
                       errorContainer.innerHTML = '';
+                    }
+
+                    // Display warnings if any
+                    if (warnings.length > 0) {
+                      warningContainer.innerHTML = '<div class="warning-display">⚠️ Warnings: ' + warnings.join('; ') + '</div>';
+                    } else {
+                      warningContainer.innerHTML = '';
                     }
 
                     // Initialize viewer with response_html
@@ -1203,6 +1271,8 @@ const handler = createMcpHandler(async (server: any) => {
   };
 
   // Register resources
+  // Apps SDK Requirement: Widget HTML served via registerResource with "text/html+skybridge"
+  // and referenced via _meta["openai/outputTemplate"] from tool responses
   server.registerResource(
     "demo-viewer-widget",
     demoViewerWidget.templateUri,
@@ -1230,6 +1300,8 @@ const handler = createMcpHandler(async (server: any) => {
       ],
     })
   );
+
+  timing = logTiming("Registered demo-viewer-widget resource", timing);
 
   server.registerResource(
     "pdf-upload-widget",
@@ -1296,6 +1368,8 @@ const handler = createMcpHandler(async (server: any) => {
     })
   );
 
+  timing = logTiming("Registered pdf-upload-widget resource", timing);
+
   // Register global tool widget resource
   server.registerResource(
     "global-tool-widget",
@@ -1326,6 +1400,8 @@ const handler = createMcpHandler(async (server: any) => {
     })
   );
 
+  timing = logTiming("Registered global-tool-widget resource", timing);
+
   // PRIMARY TOOL: PDF Upload & Viewer (registered first)
   server.registerTool(
     pdfUploadWidget.id,
@@ -1338,8 +1414,9 @@ const handler = createMcpHandler(async (server: any) => {
       _meta: widgetMeta(pdfUploadWidget),
     },
     async (args: { message?: string }) => {
+      const toolStart = Date.now();
       const { message } = args;
-      return {
+      const result = {
         content: [{
           type: "text",
           text: message || "PDF viewer is ready! You can now upload and view documents. Click the upload button or drag and drop files.",
@@ -1351,8 +1428,12 @@ const handler = createMcpHandler(async (server: any) => {
         },
         _meta: widgetMeta(pdfUploadWidget),
       };
+      console.log(`[MCP Tool] upload_pdf_viewer executed in ${Date.now() - toolStart}ms`);
+      return result;
     }
   );
+
+  timing = logTiming("Registered upload_pdf_viewer tool", timing);
 
   // SECONDARY TOOL: Demo Viewer (only when explicitly asked)
   server.registerTool(
@@ -1364,7 +1445,8 @@ const handler = createMcpHandler(async (server: any) => {
       _meta: widgetMeta(demoViewerWidget),
     },
     async () => {
-      return {
+      const toolStart = Date.now();
+      const result = {
         content: [{
           type: "text",
           text: "Opening demo viewer. Note: For full features including theme switching, use the PDF Upload Viewer instead.",
@@ -1375,8 +1457,12 @@ const handler = createMcpHandler(async (server: any) => {
         },
         _meta: widgetMeta(demoViewerWidget),
       };
+      console.log(`[MCP Tool] demo_viewer executed in ${Date.now() - toolStart}ms`);
+      return result;
     }
   );
+
+  timing = logTiming("Registered demo_viewer tool", timing);
 
   // ========== TOOLBAR CUSTOMIZATION TOOL (UNCHANGED) ==========
   server.registerTool(
@@ -1412,6 +1498,7 @@ Example: To keep only thumbnails and download, use action "keep_only" with tools
       _meta: widgetMeta(pdfUploadWidget),
     },
     async (args: { action: "remove" | "keep_only" | "add" | "reset" | "get"; tools?: string[] }) => {
+      const toolStart = Date.now();
       const { action, tools } = args;
 
       // Normalize tool names/aliases to actual PSPDFKit toolbar item `type` values.
@@ -1420,7 +1507,7 @@ Example: To keep only thumbnails and download, use action "keep_only" with tools
       // In the ChatGPT App SDK template, tools cannot execute JS inside the widget iframe.
       // Instead, we return a structured payload that the widget reads from `window.openai.toolOutput`
       // and applies to the live PSPDFKit instance.
-      return {
+      const result = {
         content: [{
           type: "text",
           text: `Toolbar update: ${action}${normalizedTools.length ? ` [${normalizedTools.join(", ")}]` : ""}`,
@@ -1434,8 +1521,13 @@ Example: To keep only thumbnails and download, use action "keep_only" with tools
         },
         _meta: widgetMeta(pdfUploadWidget),
       };
+
+      console.log(`[MCP Tool] customize_toolbar executed in ${Date.now() - toolStart}ms`);
+      return result;
     }
   );
+
+  timing = logTiming("Registered customize_toolbar tool", timing);
 
   // ========== SELECT TOOL (UNCHANGED) ==========
   // Returns an intent payload that the widget applies by setting ViewState.interactionMode.
@@ -1457,6 +1549,7 @@ Example: To keep only thumbnails and download, use action "keep_only" with tools
       _meta: widgetMeta(pdfUploadWidget),
     },
     async (args: { tool: string; keepSelectedTool?: boolean }) => {
+      const toolStart = Date.now();
       const { tool, keepSelectedTool } = args;
       const normalize = (s: string) => (s ?? "").trim().toLowerCase();
 
@@ -1528,7 +1621,7 @@ Example: To keep only thumbnails and download, use action "keep_only" with tools
       const key = TOOL_SYNONYMS[normalize(tool)] ?? normalize(tool);
       const keep = keepSelectedTool !== false;
 
-      return {
+      const result = {
         content: [
           {
             type: "text",
@@ -1545,8 +1638,13 @@ Example: To keep only thumbnails and download, use action "keep_only" with tools
         },
         _meta: widgetMeta(pdfUploadWidget),
       };
+
+      console.log(`[MCP Tool] select_tool executed in ${Date.now() - toolStart}ms`);
+      return result;
     }
   );
+
+  timing = logTiming("Registered select_tool", timing);
 
   // ========== GLOBAL TOOL (POC ORCHESTRATOR) - UPDATED ==========
   server.registerTool(
@@ -1560,17 +1658,30 @@ Example: To keep only thumbnails and download, use action "keep_only" with tools
       _meta: widgetMeta(globalToolWidget),
     },
     async (args: { user_prompt: string }) => {
+      // IMPORTANT: This handler executes ONLY when the tool is called by ChatGPT,
+      // NOT during MCP initialization. This ensures /mcp responds quickly.
+      const toolStart = Date.now();
       const { user_prompt } = args;
 
       try {
-        // Call the PromptOrchestrator backend module
+        // Call the PromptOrchestrator backend module (slow: 5-30s LLM API call)
+        // This is OK here because we're inside a tool handler, not MCP init
+        console.log(`[MCP Tool] global_tool starting PromptOrchestrator for prompt: "${user_prompt.substring(0, 50)}..."`);
+        const orchestratorStart = Date.now();
         const result = await PromptOrchestrator({ user_prompt });
+        console.log(`[MCP Tool] PromptOrchestrator completed in ${Date.now() - orchestratorStart}ms`);
+
+        const errorMsg = result.errors.length > 0 ? `⚠️ Errors: ${result.errors.join("; ")}` : "";
+        const warningMsg = result.warnings?.length ? `⚠️ Warnings: ${result.warnings.join("; ")}` : "";
+        const statusLines = [errorMsg, warningMsg].filter(Boolean).join("\n\n");
+
+        console.log(`[MCP Tool] global_tool total execution: ${Date.now() - toolStart}ms`);
 
         return {
           content: [
             {
               type: "text",
-              text: `✅ Processed request using ${result.provider} (${result.model_used})\n\n📝 User prompt: "${user_prompt}"\n\n${result.errors.length > 0 ? "⚠️ Errors: " + result.errors.join("; ") : "✨ Response generated successfully"}`,
+              text: `✅ Processed request using ${result.provider} (${result.model_used})\n\n📝 User prompt: "${user_prompt}"\n\n${statusLines || "✨ Response generated successfully"}`,
             },
           ],
           structuredContent: {
@@ -1584,13 +1695,14 @@ Example: To keep only thumbnails and download, use action "keep_only" with tools
               response_html: result.response_html,
               errors: result.errors,
               available_models: result.available_models,
+              warnings: result.warnings,
             },
             timestamp: new Date().toISOString(),
           },
           _meta: widgetMeta(globalToolWidget),
         };
       } catch (error) {
-        console.error("global_tool error:", error);
+        console.error(`[MCP Tool] global_tool error after ${Date.now() - toolStart}ms:`, error);
 
         const errorMsg = error instanceof Error ? error.message : "Unknown error";
 
@@ -1611,6 +1723,7 @@ Example: To keep only thumbnails and download, use action "keep_only" with tools
               response_text: errorMsg,
               response_html: `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Error</title><style>body{font-family:sans-serif;padding:24px;background:#1a1414;color:#fff;}h2{color:#ef4444;}</style></head><body><h2>⚠️ Error</h2><p>${errorMsg.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p></body></html>`,
               errors: [errorMsg],
+              warnings: [],
             },
             timestamp: new Date().toISOString(),
           },
@@ -1619,6 +1732,16 @@ Example: To keep only thumbnails and download, use action "keep_only" with tools
       }
     }
   );
+
+  timing = logTiming("Registered global_tool", timing);
+
+  // Final timing: Total MCP initialization time
+  const totalTime = Date.now() - startTime;
+  console.log(`[MCP Init] ✅ COMPLETE - Total initialization: ${totalTime}ms`);
+
+  if (totalTime > 1000) {
+    console.warn(`[MCP Init] ⚠️  WARNING: MCP init took ${totalTime}ms (>1s). ChatGPT expects fast responses for action reload.`);
+  }
 });
 
 export const GET = handler;

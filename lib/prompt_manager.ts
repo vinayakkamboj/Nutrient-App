@@ -1,8 +1,13 @@
 /**
  * prompt_manager.ts
  *
- * Creates enhanced prompts that force the model to return complete, runnable HTML documents
- * with Nutrient Web SDK viewer code.
+ * Enhanced Prompt Manager for Nutrient Web SDK widget code generation.
+ *
+ * Design Goals:
+ * - CODE-ONLY output (zero prose, zero markdown)
+ * - Domain lock: Nutrient Web SDK only
+ * - Widget-safe execution (CDN-based, no bundlers in HTML mode)
+ * - Deterministic, executable code that loads viewer properly
  */
 
 export interface PromptManagerInput {
@@ -15,185 +20,260 @@ export interface PromptManagerOutput {
 }
 
 /**
- * BASE VIEWER TEMPLATE
- * The model MUST use this as a starting point and customize based on user request
+ * CODE-ONLY OUTPUT ENFORCEMENT
  */
-const BASE_VIEWER_TEMPLATE = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Nutrient Viewer</title>
-  <style>
-    html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-    .app { height: 100%; display: flex; flex-direction: column; background: #1a1414; color: #fff; }
-    .header { padding: 10px 12px; border-bottom: 1px solid #3a3434; display: flex; align-items: center; justify-content: space-between; background: #2a2424; }
-    .header strong { font-size: 16px; }
-    .toolbar { padding: 8px 12px; border-bottom: 1px solid #3a3434; display: flex; gap: 8px; flex-wrap: wrap; background: #2a2424; }
-    .main { flex: 1; min-height: 0; position: relative; }
-    #viewer { height: 100%; width: 100%; }
-    .badge { font-size: 12px; padding: 4px 8px; border: 1px solid #3a3434; border-radius: 999px; background: #1a1414; }
-    .empty { padding: 24px; text-align: center; color: #888; }
-    .status { font-size: 12px; color: #3b82f6; }
-  </style>
-</head>
-<body>
-  <div class="app">
-    <div class="header">
-      <strong>Nutrient Viewer</strong>
-      <span class="status" id="status">ready</span>
-    </div>
-    <div class="toolbar" id="toolbar">
-      <span class="badge">Default Toolbar</span>
-    </div>
-    <div class="main">
-      <div id="viewer">
-        <div class="empty">Viewer ready. No document loaded.</div>
-      </div>
-    </div>
+const CODE_ONLY_RULES = `
+========================================================
+CRITICAL: CODE-ONLY OUTPUT RULE
+========================================================
+
+YOU MUST OUTPUT CODE ONLY. ABSOLUTELY NO PROSE.
+
+FORBIDDEN:
+- NO markdown code fences (\`\`\`html, \`\`\`typescript, etc.)
+- NO headings (# Heading, ## Subheading)
+- NO bullet points or numbered lists
+- NO explanations or descriptions
+- NO "Here is...", "This code...", or any prose
+- NO surrounding text whatsoever
+
+ALLOWED OUTPUT FORMATS:
+
+1) HTML WIDGET (default for most requests):
+   - Start immediately with: <!DOCTYPE html>
+   - Complete, self-contained HTML document
+   - No markdown, no explanations
+   - Example:
+     <!DOCTYPE html>
+     <html lang="en">
+     <head>
+       <meta charset="UTF-8">
+       <title>Viewer</title>
+       <style>
+         body { margin: 0; }
+         #viewer { width: 100%; height: 100vh; }
+       </style>
+     </head>
+     <body>
+       <div id="viewer"></div>
+       <script src="https://cdn.cloud.pspdfkit.com/pspdfkit-web@1.10.0/nutrient-viewer.js"></script>
+       <script>
+         window.addEventListener("DOMContentLoaded", () => {
+           const container = document.getElementById("viewer");
+           if (window.NutrientViewer && container) {
+             window.NutrientViewer.unload(container);
+             window.NutrientViewer.load({
+               container: container,
+               document: "https://www.nutrient.io/downloads/nutrient-web-demo.pdf",
+             });
+           }
+         });
+       </script>
+     </body>
+     </html>
+
+2) NEXT.JS / TYPESCRIPT MULTI-FILE (only if user explicitly requests):
+   - Separate files with line comments ONLY
+   - Format:
+     // FILE: app/layout.tsx
+     <code here>
+     // FILE: global.d.ts
+     <code here>
+     // FILE: app/page.tsx
+     <code here>
+   - Still CODE ONLY (no prose, no markdown)
+
+3) OUT OF SCOPE (if request is not about Nutrient Web SDK):
+   - Output ONLY a comment block:
+     /*
+       OUT_OF_SCOPE: <reason in 5 words or less>
+       RELEVANT DOCS (plain text):
+       https://www.nutrient.io/sdk/web/getting-started/nextjs/
+       https://www.nutrient.io/sdk/web/getting-started/typescript/
+       SUGGESTED SEARCH QUERIES:
+       - Nutrient Web SDK viewer CDN
+       - Nutrient toolbar customization
+     */
+
+DEFAULT BEHAVIOR:
+- If user asks to "load viewer" or similar: output HTML widget (format 1)
+- If user explicitly asks for Next.js/TypeScript: output multi-file (format 2)
+- Otherwise: output HTML widget (format 1)
+`.trim();
+
+/**
+ * DOMAIN LOCK: Nutrient Web SDK ONLY
+ */
+const DOMAIN_LOCK = `
+========================================================
+DOMAIN LOCK: NUTRIENT WEB SDK ONLY
+========================================================
+
+YOU MUST ONLY GENERATE CODE FOR:
+- Nutrient Web SDK (window.NutrientViewer)
+- Viewer loading and configuration
+- Toolbar manipulation (viewer toolbar, document editor toolbar)
+- Annotations
+- Document editor toolbar/footer customization
+
+FORBIDDEN:
+- Other PDF libraries (pdf.js, PDF-LIB, etc.)
+- Hallucinated APIs not in Nutrient Web SDK
+- Non-Nutrient functionality
+
+CDN METHOD ONLY:
+- Entry point: window.NutrientViewer
+- Load: window.NutrientViewer.load({...})
+- Unload: window.NutrientViewer.unload(container)
+- No npm imports in HTML mode
+- No bundlers in HTML widget mode
+`.trim();
+
+/**
+ * VIEWER LOADING CONTRACT
+ */
+const VIEWER_CONTRACT = `
+========================================================
+VIEWER LOADING CONTRACT (CDN)
+========================================================
+
+REQUIRED PATTERN:
+
+1) Include CDN script:
+   <script src="https://cdn.cloud.pspdfkit.com/pspdfkit-web@1.10.0/nutrient-viewer.js"></script>
+
+2) Container MUST have explicit dimensions:
+   <div id="viewer" style="width: 100%; height: 100vh;"></div>
+
+3) Load pattern:
+   const container = document.getElementById("viewer");
+   if (window.NutrientViewer && container) {
+     window.NutrientViewer.unload(container);  // Always unload first
+     window.NutrientViewer.load({
+       container: container,
+       document: "https://www.nutrient.io/downloads/nutrient-web-demo.pdf",
+     });
+   }
+
+4) Cleanup/reload:
+   window.NutrientViewer.unload(container);
+
+CRITICAL:
+- ALWAYS call unload before load
+- Container MUST have width and height
+- Use window.NutrientViewer (global object from CDN)
+`.trim();
+
+/**
+ * REFERENCE GUIDE (embedded for model grounding, NOT for output)
+ */
+const REFERENCE_GUIDE = `
+========================================================
+REFERENCE GUIDE (DO NOT OUTPUT THIS SECTION)
+========================================================
+
+NEXT.JS PATTERN:
+Layout: Use <Script src="https://cdn.cloud.pspdfkit.com/pspdfkit-web@1.10.0/nutrient-viewer.js" strategy="beforeInteractive"/>
+Types: declare global { interface Window { NutrientViewer?: typeof NutrientViewer; } }
+Viewer: useEffect(() => { NutrientViewer.unload(container); NutrientViewer.load({...}); }, []);
+
+TOOLBAR CUSTOMIZATION:
+Document editor: PSPDFKit.defaultDocumentEditorToolbarItems.filter(...) + custom items
+Main toolbar: instance.setToolbarItems(...)
+
+DOCS: https://www.nutrient.io/sdk/web/getting-started/
+`.trim();
+
+/**
+ * TOOLBAR BEHAVIOR RULES
+ */
+const TOOLBAR_RULES = `
+========================================================
+TOOLBAR BEHAVIOR RULES
+========================================================
+
+MAIN VIEWER TOOLBAR:
+- Access: instance.toolbarItems
+- Modify: instance.setToolbarItems([...])
+- Available after load completes
+
+DOCUMENT EDITOR TOOLBAR:
+- Configure during load: documentEditorToolbarItems
+- Start from: PSPDFKit.defaultDocumentEditorToolbarItems
+- Filter, map, or add custom items
+
+DOCUMENT EDITOR FOOTER:
+- Configure during load: documentEditorFooterItems
+- Start from: PSPDFKit.defaultDocumentEditorFooterItems
+
+DO NOT INVENT TOOLBAR ITEM TYPES.
+Use only documented types from Nutrient Web SDK.
+`.trim();
+
+/**
+ * OPTIONAL UI ELEMENTS
+ */
+const OPTIONAL_UI = `
+========================================================
+OPTIONAL UI ELEMENTS
+========================================================
+
+NAVBAR / HEADER:
+- Include ONLY if user explicitly requests
+- If user asks to show their name: render a variable like userName
+- Example:
+  <div style="padding: 1rem; background: #333; color: white;">
+    Welcome, <span id="userName">User</span>
   </div>
 
-  <script type="module">
-    window.__NUTRIENT_INPUT__ = window.__NUTRIENT_INPUT__ || {};
-    const status = document.getElementById("status");
-    const toolbar = document.getElementById("toolbar");
-    const viewerDiv = document.getElementById("viewer");
-
-    function setStatus(text) {
-      if (status) status.textContent = text;
-    }
-
-    function renderToolbarInfo(removeList) {
-      if (!toolbar) return;
-      toolbar.innerHTML = "";
-      const pill = document.createElement("span");
-      pill.className = "badge";
-      pill.textContent = "toolbarRemove: " + (removeList && removeList.length ? removeList.join(", ") : "(none)");
-      toolbar.appendChild(pill);
-    }
-
-    async function init() {
-      try {
-        setStatus("initializing");
-        const input = window.__NUTRIENT_INPUT__ || {};
-        renderToolbarInfo(input.toolbarRemove || []);
-
-        // TODO: Load Nutrient Web SDK if available
-        // If input.documentUrl or input.documentBase64 is provided, load it
-        // Example:
-        // const instance = await PSPDFKit.load({
-        //   container: viewerDiv,
-        //   document: input.documentUrl || input.documentBase64,
-        // });
-        //
-        // if (input.toolbarRemove && input.toolbarRemove.length > 0) {
-        //   const items = instance.toolbarItems;
-        //   instance.setToolbarItems(items.filter(item => !input.toolbarRemove.includes(item.type)));
-        // }
-
-        setStatus("ready");
-      } catch (e) {
-        setStatus("error");
-        if (viewerDiv) {
-          viewerDiv.innerHTML = '<div class="empty">Error: ' + (e && e.message ? e.message : String(e)) + "</div>";
-        }
-      }
-    }
-    init();
-  </script>
-</body>
-</html>`;
+DEFAULT:
+- Minimal UI (viewer only)
+- No navbar unless requested
+`.trim();
 
 /**
- * NUTRIENT TOOLBAR REMOVAL EXAMPLES
+ * Helper: builds the enhanced prompt
  */
-const TOOLBAR_EXAMPLES = `
-NUTRIENT TOOLBAR CUSTOMIZATION (Authoritative API Pattern):
+function buildEnhancedPrompt(userPrompt: string): string {
+  const parts: string[] = [];
 
-To remove toolbar items:
-  const items = instance.toolbarItems;
-  instance.setToolbarItems(items.filter(item => item.type !== "ink"));
+  parts.push(CODE_ONLY_RULES);
+  parts.push("");
+  parts.push(DOMAIN_LOCK);
+  parts.push("");
+  parts.push(VIEWER_CONTRACT);
+  parts.push("");
+  parts.push(REFERENCE_GUIDE);
+  parts.push("");
+  parts.push(TOOLBAR_RULES);
+  parts.push("");
+  parts.push(OPTIONAL_UI);
+  parts.push("");
+  parts.push("========================================================");
+  parts.push("USER REQUEST");
+  parts.push("========================================================");
+  parts.push(userPrompt.trim());
+  parts.push("");
+  parts.push("========================================================");
+  parts.push("FINAL REMINDER: OUTPUT CODE ONLY");
+  parts.push("========================================================");
+  parts.push("Remember:");
+  parts.push("- NO markdown, NO prose, NO explanations");
+  parts.push("- Start with <!DOCTYPE html> for HTML widgets");
+  parts.push("- Use // FILE: comments for multi-file Next.js output");
+  parts.push("- Output ONLY executable code or comment block for out-of-scope");
+  parts.push("");
+  parts.push("Generate the code now:");
 
-To remove multiple items:
-  const items = instance.toolbarItems;
-  const removeTypes = ["ink", "highlighter", "text"];
-  instance.setToolbarItems(items.filter(item => !removeTypes.includes(item.type)));
-
-Common toolbar item types:
-- "sidebar-thumbnails", "export-pdf", "search", "print"
-- "signature", "zoom-in", "zoom-out", "zoom-mode"
-- "ink", "highlighter", "text-highlighter", "note", "text"
-- "line", "arrow", "rectangle", "ellipse", "polygon"
-- "pager", "pan", "annotate", "document-editor", "document-crop"
-
-CRITICAL: Use ONLY this pattern. Do NOT invent custom APIs.
-`;
+  return parts.join("\n");
+}
 
 /**
- * NO-HALLUCINATION RULES
- */
-const NO_HALLUCINATION_RULES = `
-STRICT NO-HALLUCINATION RULE:
-- Use ONLY the documented Nutrient Web SDK APIs shown above
-- If uncertain about an API, keep the default behavior and add a comment: // TODO: Verify API
-- Do NOT invent methods like instance.removeToolbarItem() or instance.hideButton()
-- Do NOT invent events or properties not in the reference
-- When in doubt, leave a clear TODO comment for manual implementation
-`;
-
-/**
- * prompt_manager
- *
- * Creates enhanced prompt that forces model to return complete HTML document
+ * Public API
  */
 export function prompt_manager(input: PromptManagerInput): PromptManagerOutput {
-  const { user_prompt } = input;
-
-  const enhanced_prompt = `
-You are an expert code generator for Nutrient Web SDK (formerly PSPDFKit).
-
-YOUR TASK:
-Analyze this user request and generate a COMPLETE HTML DOCUMENT that implements it.
-
-USER REQUEST:
-"""
-${user_prompt}
-"""
-
-CRITICAL OUTPUT REQUIREMENTS:
-1. Return a COMPLETE HTML document starting with <!DOCTYPE html>
-2. NO markdown fences (no \`\`\`html)
-3. NO explanations or commentary
-4. Code-only output
-5. The HTML must be immediately runnable in a sandboxed iframe
-
-MANDATORY STRUCTURE:
-Start with the BASE VIEWER TEMPLATE below and customize it based on the user request.
-
-${BASE_VIEWER_TEMPLATE}
-
-CUSTOMIZATION INSTRUCTIONS:
-
-If the user asks to "remove toolbar items" or "hide tools":
-${TOOLBAR_EXAMPLES}
-
-If the user asks to "load a document":
-- Accept documentUrl or documentBase64 via window.__NUTRIENT_INPUT__
-- Use PSPDFKit.load() if SDK is available
-- Show empty state if no document provided
-
-If the user asks for "custom layout" or "styling":
-- Modify the CSS in <style> section
-- Keep the core structure (header, toolbar, viewer container)
-
-${NO_HALLUCINATION_RULES}
-
-OUTPUT FORMAT:
-Return ONLY the complete HTML document. No text before or after. No markdown fences.
-The output must be valid HTML that can be set as iframe.srcdoc.
-
-BEGIN YOUR RESPONSE WITH: <!DOCTYPE html>
-`.trim();
+  const user_prompt = input.user_prompt ?? "";
+  const enhanced_prompt = buildEnhancedPrompt(user_prompt);
 
   return {
     user_prompt,

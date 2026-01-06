@@ -16,6 +16,7 @@ export interface PromptOrchestratorOutput {
   response_html: string;
   errors: string[];
   available_models?: string[];
+  warnings?: string[];
 }
 
 async function getAnthropicModels(apiKey: string): Promise<string[]> {
@@ -43,12 +44,36 @@ async function getAnthropicModels(apiKey: string): Promise<string[]> {
   }
 }
 
+// Extract date suffix (YYYYMMDD) from model name, return as number for comparison
+function extractModelDate(modelName: string): number {
+  const match = modelName.match(/(\d{8})$/);
+  return match ? parseInt(match[1], 10) : 0;
+}
+
 function selectBestModel(models: string[]): string | null {
   if (models.length === 0) return null;
-  const sonnet = models.find(m => m.toLowerCase().includes("sonnet"));
-  if (sonnet) return sonnet;
-  const opus = models.find(m => m.toLowerCase().includes("opus"));
-  if (opus) return opus;
+
+  // Prefer Sonnet models, choosing newest by date
+  const sonnets = models.filter(m => m.toLowerCase().includes("sonnet"));
+  if (sonnets.length > 0) {
+    return sonnets.reduce((best, current) => {
+      const bestDate = extractModelDate(best);
+      const currentDate = extractModelDate(current);
+      return currentDate > bestDate ? current : best;
+    });
+  }
+
+  // If no Sonnet, prefer Opus models, choosing newest by date
+  const opuses = models.filter(m => m.toLowerCase().includes("opus"));
+  if (opuses.length > 0) {
+    return opuses.reduce((best, current) => {
+      const bestDate = extractModelDate(best);
+      const currentDate = extractModelDate(current);
+      return currentDate > bestDate ? current : best;
+    });
+  }
+
+  // Otherwise fall back to first entry
   return models[0];
 }
 
@@ -57,6 +82,7 @@ export async function PromptOrchestrator(
 ): Promise<PromptOrchestratorOutput> {
   const { user_prompt } = input;
   const errors: string[] = [];
+  const warnings: string[] = [];
   const provider = (process.env.LLM_PROVIDER?.toLowerCase() === "openai" ? "openai" : "anthropic") as "anthropic" | "openai";
 
   try {
@@ -71,11 +97,14 @@ export async function PromptOrchestrator(
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (!apiKey) {
         errors.push("ANTHROPIC_API_KEY not found in environment variables");
-        return buildErrorResponse(user_prompt, enhanced_prompt, provider, "", "", errors, []);
+        return buildErrorResponse(user_prompt, enhanced_prompt, provider, "", "", errors, [], warnings);
       }
 
-      const anthropic = new Anthropic({ apiKey });
-      modelRequested = process.env.LLM_MODEL || "claude-3-sonnet-20240229";
+      const anthropic = new Anthropic({
+        apiKey,
+        timeout: 30000, // 30 second timeout for all requests
+      });
+      modelRequested = process.env.LLM_MODEL || "claude-sonnet-4-5-20250929";
       modelUsed = modelRequested;
 
       try {
@@ -101,13 +130,11 @@ export async function PromptOrchestrator(
         const requestId = firstError?.requestID || "";
 
         if (isModelNotFound) {
-          errors.push(`Model "${modelRequested}" not found (request_id: ${requestId})`);
           availableModels = await getAnthropicModels(apiKey);
 
           if (availableModels.length > 0) {
             const fallbackModel = selectBestModel(availableModels);
             if (fallbackModel) {
-              errors.push(`Retrying with fallback: ${fallbackModel}`);
               modelUsed = fallbackModel;
 
               try {
@@ -122,22 +149,24 @@ export async function PromptOrchestrator(
                 if (content.type === "text") {
                   response_text = content.text;
                   response_html = extractAndValidateHTML(content.text);
-                  errors.length = 0;
-                  errors.push(`Success with fallback: ${fallbackModel}`);
+                  warnings.push(`Model "${modelRequested}" not found; used fallback "${fallbackModel}"`);
                 }
               } catch (retryError: any) {
                 const retryMsg = retryError instanceof Error ? retryError.message : String(retryError);
                 const retryRequestId = retryError?.requestID || "";
-                errors.push(`Fallback failed: ${retryMsg} (request_id: ${retryRequestId})`);
+                errors.push(`Model "${modelRequested}" not found (request_id: ${requestId})`);
+                errors.push(`Fallback "${fallbackModel}" failed: ${retryMsg} (request_id: ${retryRequestId})`);
                 response_text = `Error: ${retryMsg}`;
                 response_html = createErrorHTML(retryMsg, provider, modelRequested, modelUsed, availableModels, retryRequestId);
               }
             } else {
+              errors.push(`Model "${modelRequested}" not found (request_id: ${requestId})`);
               errors.push("No suitable fallback model found");
               response_text = "Error: No suitable fallback";
               response_html = createErrorHTML("No suitable fallback", provider, modelRequested, modelUsed, availableModels, requestId);
             }
           } else {
+            errors.push(`Model "${modelRequested}" not found (request_id: ${requestId})`);
             errors.push("Failed to fetch available models");
             response_text = `Error: ${firstError.message}`;
             response_html = createErrorHTML(firstError.message, provider, modelRequested, modelUsed, [], requestId);
@@ -160,15 +189,19 @@ export async function PromptOrchestrator(
         response_html,
         errors,
         available_models: availableModels.length > 0 ? availableModels.slice(0, 10) : undefined,
+        warnings: warnings.length > 0 ? warnings : undefined,
       };
     } else {
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
         errors.push("OPENAI_API_KEY not found in environment variables");
-        return buildErrorResponse(user_prompt, enhanced_prompt, provider, "", "", errors, []);
+        return buildErrorResponse(user_prompt, enhanced_prompt, provider, "", "", errors, [], warnings);
       }
 
-      const openai = new OpenAI({ apiKey });
+      const openai = new OpenAI({
+        apiKey,
+        timeout: 30000, // 30 second timeout for all requests
+      });
       modelRequested = process.env.LLM_MODEL || "gpt-4o-mini";
       modelUsed = modelRequested;
 
@@ -197,6 +230,7 @@ export async function PromptOrchestrator(
         response_text,
         response_html,
         errors,
+        warnings: warnings.length > 0 ? warnings : undefined,
       };
     }
   } catch (error) {
@@ -204,7 +238,7 @@ export async function PromptOrchestrator(
     const errorMsg = error instanceof Error ? error.message : "Unknown error";
     errors.push(errorMsg);
     const { enhanced_prompt } = prompt_manager({ user_prompt });
-    return buildErrorResponse(user_prompt, enhanced_prompt, provider, "", "", errors, []);
+    return buildErrorResponse(user_prompt, enhanced_prompt, provider, "", "", errors, [], warnings);
   }
 }
 
@@ -313,7 +347,8 @@ function buildErrorResponse(
   modelRequested: string,
   modelUsed: string,
   errors: string[],
-  availableModels: string[]
+  availableModels: string[],
+  warnings: string[]
 ): PromptOrchestratorOutput {
   return {
     user_prompt,
@@ -325,6 +360,7 @@ function buildErrorResponse(
     response_html: createErrorHTML(errors.join("; "), provider, modelRequested, modelUsed, availableModels, ""),
     errors,
     available_models: availableModels.length > 0 ? availableModels.slice(0, 10) : undefined,
+    warnings: warnings.length > 0 ? warnings : undefined,
   };
 }
 
