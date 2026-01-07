@@ -159,24 +159,52 @@ const handler = createMcpHandler(async (server: any) => {
           <meta charset="UTF-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
           <title>Nutrient Viewer - Global Tool</title>
+          <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+              font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
               background: #1a1414;
               color: #fff;
               height: 100vh;
               overflow: hidden;
               position: relative;
+              padding-top: 28px;
             }
 
-            /* Viewer Panel - Full Screen */
-            .viewer-panel {
-              position: absolute;
+            /* Thin Brand Header - Fixed at top, always visible */
+            .brand-header {
+              position: fixed;
               top: 0;
               left: 0;
+              right: 0;
+              height: 28px;
+              background-color: #1a1414;
+              z-index: 10000;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 8px;
+            }
+            .brand-header img {
+              height: 16px;
+              width: auto;
+            }
+            .brand-header span {
+              font-family: 'DM Sans', sans-serif;
+              font-size: 12px;
+              font-weight: 300;
+              color: rgba(255, 255, 255, 0.9);
+              letter-spacing: 0.02em;
+            }
+
+            /* Viewer Panel - Adjusted for header */
+            .viewer-panel {
+              position: absolute;
+              top: 28px;
+              left: 0;
               width: 100%;
-              height: 100%;
+              height: calc(100% - 28px);
               display: flex;
               flex-direction: column;
             }
@@ -400,6 +428,12 @@ const handler = createMcpHandler(async (server: any) => {
           </style>
         </head>
         <body>
+          <!-- Thin Brand Header - Always visible -->
+          <header class="brand-header">
+            <img src="${baseURL}/logo.png" alt="Nutrient Logo" />
+            <span>Nutrient</span>
+          </header>
+
           <!-- Viewer Panel (Full Screen) -->
           <div class="viewer-panel">
             <div class="viewer-container" id="viewer-container">
@@ -694,11 +728,11 @@ const handler = createMcpHandler(async (server: any) => {
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
           <title>Nutrient PDF Viewer</title>
-          <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600&display=swap" rel="stylesheet">
+          <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+              font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
               background: #1a1414;
               color: #fff;
               height: 100vh;
@@ -716,13 +750,13 @@ const handler = createMcpHandler(async (server: any) => {
               padding: 0 16px;
               flex-shrink: 0;
             }
-            .navbar-left { display: flex; align-items: center; gap: 12px; }
+            .navbar-left { display: flex; align-items: center; gap: 8px; }
             .navbar-logo { width: 48px; height: 48px; object-fit: contain; }
             .navbar-title {
-              font-family: 'Space Grotesk', sans-serif;
+              font-family: 'DM Sans', sans-serif;
               font-size: 24px;
-              font-weight: 600;
-              letter-spacing: -0.02em;
+              font-weight: 500;
+              letter-spacing: 0.02em;
             }
             .navbar-right { display: flex; align-items: center; gap: 12px; }
             .upload-btn, .theme-btn {
@@ -863,7 +897,7 @@ const handler = createMcpHandler(async (server: any) => {
         <body>
           <header class="navbar">
             <div class="navbar-left">
-              <img src="/logo.png" alt="Nutrient" class="navbar-logo" onerror="this.style.display='none'">
+              <img src="${baseURL}/logo.png" alt="Nutrient" class="navbar-logo" onerror="this.style.display='none'">
               <span class="navbar-title">Nutrient</span>
             </div>
             <div class="navbar-right">

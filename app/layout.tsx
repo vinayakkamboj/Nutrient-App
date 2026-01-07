@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { baseURL } from "@/baseUrl";
 import Script from "next/script"; // ⬅️ add this
@@ -12,6 +12,12 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const dmSans = DM_Sans({
+  variable: "--font-dm-sans",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600"],
 });
 
 // ⬇️ update this metadata block
@@ -30,7 +36,7 @@ export default function RootLayout({
         <NextChatSDKBootstrap baseUrl={baseURL} />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${dmSans.variable} antialiased`}
       >
         {/* ⬇️ Nutrient Web SDK via CDN (loads before the app becomes interactive) */}
         <Script

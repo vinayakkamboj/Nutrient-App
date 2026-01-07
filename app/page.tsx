@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Space_Grotesk } from "next/font/google";
+import { DM_Sans } from "next/font/google";
 
-const spaceGrotesk = Space_Grotesk({
+const dmSans = DM_Sans({
   subsets: ["latin"],
-  weight: ["600"],
+  weight: ["400", "600"],
   display: "swap",
 });
 
@@ -54,12 +54,12 @@ export default function Home() {
   return (
     <main
       className="flex min-h-screen flex-col text-foreground"
-      style={{ backgroundColor: "#1a1414" }}
+      style={{ backgroundColor: "#1a1414", fontFamily: "var(--font-dm-sans)" }}
     >
       <header
         className="flex items-center justify-between border-b px-4"
-        style={{ 
-          height: HEADER_HEIGHT, 
+        style={{
+          height: HEADER_HEIGHT,
           backgroundColor: "#1a1414",
           borderColor: "#3a3434"
         }}
@@ -72,7 +72,7 @@ export default function Home() {
             height={48}
             className="object-contain"
           />
-          <span className={`${spaceGrotesk.className} text-2xl tracking-tight`}>
+          <span className={`${dmSans.className} text-2xl font-semibold tracking-tight`}>
             Nutrient
           </span>
         </div>
