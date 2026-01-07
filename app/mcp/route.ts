@@ -147,13 +147,8 @@ const handler = createMcpHandler(async (server: any) => {
   <title>Nutrient Demo Viewer</title>
   ${DMSANS_HEAD}
   <style>
-          /* Global font override for all widget UI */
-          html, body, button, input, select, textarea {
-            font-family: "DM Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif !important;
-          }
-
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; }
+    body { height: 100vh; display: flex; flex-direction: column; }
     #viewer { flex: 1; width: 100%; }
   </style>
 </head>
@@ -207,7 +202,6 @@ const handler = createMcpHandler(async (server: any) => {
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body {
-              font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
               background: #1a1414;
               color: #fff;
               height: 100vh;
@@ -794,7 +788,6 @@ const handler = createMcpHandler(async (server: any) => {
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body {
-              font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
               background: #1a1414;
               color: #fff;
               height: 100vh;
