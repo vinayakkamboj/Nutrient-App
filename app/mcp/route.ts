@@ -24,6 +24,44 @@ function logTiming(label: string, startTime: number) {
  * mimeType "text/html+skybridge" and referenced via _meta["openai/outputTemplate"]
  */
 
+
+// Shared font bundle: DM Sans everywhere, with no Grotesk flash.
+// - Preconnect for faster font fetch
+// - display=block to avoid swap flicker
+// - hide document until fonts are ready (with short timeout fallback)
+const DMSANS_HEAD = `
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=block">
+  <style>
+    html { visibility: hidden; }
+    html.fonts-ready { visibility: visible; }
+    :root, html, body, button, input, select, textarea, label, div, span, p, a, li, td, th {
+      font-family: "DM Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji" !important;
+    }
+  </style>
+  <script>
+    (function () {
+      var done = false;
+      function show(){ if (done) return; done = true; document.documentElement.classList.add('fonts-ready'); }
+      var t = setTimeout(show, 900);
+      try {
+        if (document.fonts && document.fonts.load) {
+          Promise.all([
+            document.fonts.load('300 12px "DM Sans"'),
+            document.fonts.load('400 14px "DM Sans"'),
+            document.fonts.load('500 14px "DM Sans"')
+          ]).then(function(){ clearTimeout(t); show(); }).catch(function(){ clearTimeout(t); show(); });
+        } else {
+          clearTimeout(t); show();
+        }
+      } catch(e) {
+        clearTimeout(t); show();
+      }
+    })();
+  </script>
+`;
+
 type ContentWidget = {
   id: string;
   title: string;
@@ -107,7 +145,13 @@ const handler = createMcpHandler(async (server: any) => {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nutrient Demo Viewer</title>
+  ${DMSANS_HEAD}
   <style>
+          /* Global font override for all widget UI */
+          html, body, button, input, select, textarea {
+            font-family: "DM Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif !important;
+          }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; }
     #viewer { flex: 1; width: 100%; }
@@ -159,7 +203,7 @@ const handler = createMcpHandler(async (server: any) => {
           <meta charset="UTF-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
           <title>Nutrient Viewer - Global Tool</title>
-          <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+          ${DMSANS_HEAD}
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body {
@@ -183,7 +227,9 @@ const handler = createMcpHandler(async (server: any) => {
               z-index: 10000;
               display: flex;
               align-items: center;
-              justify-content: center;
+              justify-content: flex-start;
+              padding: 0 12px;
+              border-bottom: 1px solid #3a3434;
               gap: 8px;
             }
             .brand-header img {
@@ -430,7 +476,7 @@ const handler = createMcpHandler(async (server: any) => {
         <body>
           <!-- Thin Brand Header - Always visible -->
           <header class="brand-header">
-            <img src="${baseURL}/logo.png" alt="Nutrient Logo" />
+            <img src="${baseURL}/logo.png" alt="Nutrient" onload="this.style.opacity=1" onerror="this.onerror=null; this.src=\'https://www.nutrient.io/favicon.ico\'; this.style.opacity=1" style="opacity:0;transition:opacity 0.2s" />
             <span>Nutrient</span>
           </header>
 
@@ -744,7 +790,7 @@ const handler = createMcpHandler(async (server: any) => {
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
           <title>Nutrient PDF Viewer</title>
-          <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+          ${DMSANS_HEAD}
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body {
@@ -913,7 +959,7 @@ const handler = createMcpHandler(async (server: any) => {
         <body>
           <header class="navbar">
             <div class="navbar-left">
-              <img src="${baseURL}/logo.png" alt="Nutrient" class="navbar-logo" onerror="this.style.display='none'">
+              <img src="${baseURL}/logo.png" alt="Nutrient" class="navbar-logo" onload="this.style.opacity=1" onerror="this.style.display='none'" style="opacity:0;transition:opacity 0.2s">
               <span class="navbar-title">Nutrient</span>
             </div>
             <div class="navbar-right">
@@ -1263,40 +1309,40 @@ const handler = createMcpHandler(async (server: any) => {
                 const action = payload.action;
                 const tools = Array.isArray(payload.tools) ? payload.tools : [];
 
+                // Always use the SDK's default toolbar items as the source of truth.
+                // This avoids crashes / missing config when re-adding tools.
+                const defaults = window.PSPDFKit?.defaultToolbarItems || [];
+
                 if (action === "reset") {
-                  viewerInstance.setToolbarItems(window.PSPDFKit.defaultToolbarItems);
-                  showInfo('Toolbar reset');
+                  viewerInstance.setToolbarItems(defaults);
+                  showInfo("Toolbar reset");
                   return;
                 }
 
                 if (action === "keep_only") {
-                  viewerInstance.setToolbarItems(items =>
-                    items.filter(item => tools.includes(item.type))
-                  );
-                  showInfo('Toolbar updated');
+                  viewerInstance.setToolbarItems(defaults.filter(item => tools.includes(item.type)));
+                  showInfo("Toolbar updated");
                   return;
                 }
 
                 if (action === "remove") {
-                  viewerInstance.setToolbarItems(items =>
-                    items.filter(item => !tools.includes(item.type))
-                  );
-                  showInfo('Toolbar updated');
+                  viewerInstance.setToolbarItems(defaults.filter(item => !tools.includes(item.type)));
+                  showInfo("Toolbar updated");
                   return;
                 }
 
                 if (action === "add") {
                   viewerInstance.setToolbarItems(items => {
-                    const existing = new Set(items.map(i => i.type));
-                    const toAdd = tools.filter(t => !existing.has(t)).map(t => ({ type: t }));
-                    return items.concat(toAdd);
+                    const existing = new Set((items || []).map(i => i.type));
+                    const toAdd = defaults.filter(d => tools.includes(d.type) && !existing.has(d.type));
+                    // Keep natural SDK ordering by appending in default order.
+                    return (items || []).concat(toAdd);
                   });
-                  showInfo('Toolbar updated');
+                  showInfo("Toolbar updated");
                   return;
                 }
 
                 if (action === "get") {
-                  // no-op: widget already shows current toolbar via console helpers.
                   return;
                 }
               }
@@ -1698,12 +1744,110 @@ const handler = createMcpHandler(async (server: any) => {
 
   timing = logTiming("Registered global-tool-widget resource", timing);
 
-  // PRIMARY TOOL: PDF Upload & Viewer (registered first)
+  // ========== PRIMARY TOOL: GLOBAL AI TOOL ==========
+  // REGISTERED FIRST = DEFAULT TOOL (opens automatically unless user specifies another tool)
+  server.registerTool(
+    "global_tool",
+    {
+      title: "Global Tool - Most Powerful AI based Tool (DEFAULT)",
+      description: `
+Global Tool is the default and most powerful AI tool in this environment.
+
+It acts as a universal, boundary-less assistant that can reason across context,
+orchestrate workflows, and integrate directly with custom components built using
+the Nutrient Web SDK.
+
+Unlike specialized tools, Global Tool is designed to handle end-to-end tasks,
+combine multiple capabilities in a single interaction, and adapt dynamically
+to complex user intent.
+
+Use this tool by default unless a task explicitly requires a specialized tool.
+`,
+      inputSchema: {
+        user_prompt: z.string().describe("The complete user message (100% verbatim). Pass everything to the AI."),
+      },
+      _meta: widgetMeta(globalToolWidget),
+    },
+    async (args: { user_prompt: string }) => {
+      const toolStart = Date.now();
+      const { user_prompt } = args;
+
+      try {
+        console.log(`[MCP Tool] global_tool (PRIMARY) starting for: "${user_prompt.substring(0, 50)}..."`);
+        const orchestratorStart = Date.now();
+        const result = await PromptOrchestrator({ user_prompt });
+        console.log(`[MCP Tool] PromptOrchestrator completed in ${Date.now() - orchestratorStart}ms`);
+
+        const errorMsg = result.errors.length > 0 ? `⚠️ Errors: ${result.errors.join("; ")}` : "";
+        const warningMsg = result.warnings?.length ? `⚠️ Warnings: ${result.warnings.join("; ")}` : "";
+        const statusLines = [errorMsg, warningMsg].filter(Boolean).join("\n\n");
+
+        console.log(`[MCP Tool] global_tool total execution: ${Date.now() - toolStart}ms`);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `✅ AI-generated response using ${result.provider} (${result.model_used})\n\n📝 Your request: "${user_prompt}"\n\n${statusLines || "✨ Response generated successfully"}`,
+            },
+          ],
+          structuredContent: {
+            global_tool: {
+              user_prompt: result.user_prompt,
+              enhanced_prompt: result.enhanced_prompt,
+              provider: result.provider,
+              model_requested: result.model_requested,
+              model_used: result.model_used,
+              response_text: result.response_text,
+              response_html: result.response_html,
+              errors: result.errors,
+              available_models: result.available_models,
+              warnings: result.warnings,
+            },
+            timestamp: new Date().toISOString(),
+          },
+          _meta: widgetMeta(globalToolWidget),
+        };
+      } catch (error) {
+        console.error(`[MCP Tool] global_tool error after ${Date.now() - toolStart}ms:`, error);
+
+        const errorMsg = error instanceof Error ? error.message : "Unknown error";
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ Error processing request: ${errorMsg}`,
+            },
+          ],
+          structuredContent: {
+            global_tool: {
+              user_prompt,
+              enhanced_prompt: "Error: Could not process prompt",
+              provider: "unknown" as "anthropic" | "openai",
+              model_requested: "N/A",
+              model_used: "N/A",
+              response_text: errorMsg,
+              response_html: `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Error</title><style>body{font-family:'DM Sans',sans-serif;padding:24px;background:#1a1414;color:#fff;}h2{color:#ef4444;}</style></head><body><h2>⚠️ Error</h2><p>${errorMsg.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p></body></html>`,
+              errors: [errorMsg],
+              warnings: [],
+            },
+            timestamp: new Date().toISOString(),
+          },
+          _meta: widgetMeta(globalToolWidget),
+        };
+      }
+    }
+  );
+
+  timing = logTiming("Registered global_tool (PRIMARY/DEFAULT)", timing);
+
+  // SECONDARY TOOL: PDF Upload Viewer (only when explicitly requested by name)
   server.registerTool(
     pdfUploadWidget.id,
     {
-      title: pdfUploadWidget.title,
-      description: "PRIMARY - Opens PDF viewer with upload capability. Use this by default for opening the app, viewing PDFs, or any document tasks. Supports PDF, Office documents (Word, Excel, PowerPoint), and images (PNG, JPG, TIFF).",
+      title: "📄 PDF Upload Viewer (Static - Explicit Request Only)",
+      description: "⚠️ SECONDARY - Only use when user EXPLICITLY says 'use upload viewer' or 'open upload PDF viewer' BY NAME. This is a static pre-built template. For ALL other requests, use global_tool (AI-powered, much more capable). Supports PDF, Office docs, images.",
       inputSchema: {
         message: z.string().optional().describe("Optional message to display"),
       },
@@ -1731,12 +1875,12 @@ const handler = createMcpHandler(async (server: any) => {
 
   timing = logTiming("Registered upload_pdf_viewer tool", timing);
 
-  // SECONDARY TOOL: Demo Viewer (only when explicitly asked)
+  // TERTIARY TOOL: Demo Viewer (rarely used, explicit request only)
   server.registerTool(
     demoViewerWidget.id,
     {
-      title: demoViewerWidget.title,
-      description: "Basic demo viewer - ONLY use when user explicitly asks for 'demo viewer' or 'demo view'. For all other requests use upload_pdf_viewer.",
+      title: "🔍 Demo Viewer (Minimal - Rarely Use)",
+      description: "⚠️ TERTIARY - RARELY USE. Basic minimal demo viewer with NO features. ONLY use when user EXPLICITLY says 'use demo viewer' or 'show demo view' BY NAME. For 99% of requests, use global_tool (AI-powered). Do NOT use for general requests.",
       inputSchema: {},
       _meta: widgetMeta(demoViewerWidget),
     },
@@ -1941,95 +2085,6 @@ Example: To keep only thumbnails and download, use action "keep_only" with tools
   );
 
   timing = logTiming("Registered select_tool", timing);
-
-  // ========== GLOBAL TOOL (POC ORCHESTRATOR) - UPDATED ==========
-  server.registerTool(
-    "global_tool",
-    {
-      title: "Global Tool - Orchestrator",
-      description: "Processes user requests through the PromptOrchestrator backend. Takes the full user message, creates an enhanced prompt, calls LLM API (Claude/OpenAI), and returns all values including a live viewer in the widget.",
-      inputSchema: {
-        user_prompt: z.string().describe("The full user message verbatim (100% of what the user typed)"),
-      },
-      _meta: widgetMeta(globalToolWidget),
-    },
-    async (args: { user_prompt: string }) => {
-      // IMPORTANT: This handler executes ONLY when the tool is called by ChatGPT,
-      // NOT during MCP initialization. This ensures /mcp responds quickly.
-      const toolStart = Date.now();
-      const { user_prompt } = args;
-
-      try {
-        // Call the PromptOrchestrator backend module (slow: 5-30s LLM API call)
-        // This is OK here because we're inside a tool handler, not MCP init
-        console.log(`[MCP Tool] global_tool starting PromptOrchestrator for prompt: "${user_prompt.substring(0, 50)}..."`);
-        const orchestratorStart = Date.now();
-        const result = await PromptOrchestrator({ user_prompt });
-        console.log(`[MCP Tool] PromptOrchestrator completed in ${Date.now() - orchestratorStart}ms`);
-
-        const errorMsg = result.errors.length > 0 ? `⚠️ Errors: ${result.errors.join("; ")}` : "";
-        const warningMsg = result.warnings?.length ? `⚠️ Warnings: ${result.warnings.join("; ")}` : "";
-        const statusLines = [errorMsg, warningMsg].filter(Boolean).join("\n\n");
-
-        console.log(`[MCP Tool] global_tool total execution: ${Date.now() - toolStart}ms`);
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: `✅ Processed request using ${result.provider} (${result.model_used})\n\n📝 User prompt: "${user_prompt}"\n\n${statusLines || "✨ Response generated successfully"}`,
-            },
-          ],
-          structuredContent: {
-            global_tool: {
-              user_prompt: result.user_prompt,
-              enhanced_prompt: result.enhanced_prompt,
-              provider: result.provider,
-              model_requested: result.model_requested,
-              model_used: result.model_used,
-              response_text: result.response_text,
-              response_html: result.response_html,
-              errors: result.errors,
-              available_models: result.available_models,
-              warnings: result.warnings,
-            },
-            timestamp: new Date().toISOString(),
-          },
-          _meta: widgetMeta(globalToolWidget),
-        };
-      } catch (error) {
-        console.error(`[MCP Tool] global_tool error after ${Date.now() - toolStart}ms:`, error);
-
-        const errorMsg = error instanceof Error ? error.message : "Unknown error";
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: `❌ Error processing request: ${errorMsg}`,
-            },
-          ],
-          structuredContent: {
-            global_tool: {
-              user_prompt,
-              enhanced_prompt: "Error: Could not process prompt",
-              provider: "unknown" as "anthropic" | "openai",
-              model_requested: "N/A",
-              model_used: "N/A",
-              response_text: errorMsg,
-              response_html: `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Error</title><style>body{font-family:sans-serif;padding:24px;background:#1a1414;color:#fff;}h2{color:#ef4444;}</style></head><body><h2>⚠️ Error</h2><p>${errorMsg.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p></body></html>`,
-              errors: [errorMsg],
-              warnings: [],
-            },
-            timestamp: new Date().toISOString(),
-          },
-          _meta: widgetMeta(globalToolWidget),
-        };
-      }
-    }
-  );
-
-  timing = logTiming("Registered global_tool", timing);
 
   // Final timing: Total MCP initialization time
   const totalTime = Date.now() - startTime;

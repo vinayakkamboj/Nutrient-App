@@ -54,7 +54,7 @@ export default function Home() {
   return (
     <main
       className="flex min-h-screen flex-col text-foreground"
-      style={{ backgroundColor: "#1a1414", fontFamily: "var(--font-dm-sans)" }}
+      style={{ backgroundColor: "#1a1414" }}
     >
       <header
         className="flex items-center justify-between border-b px-4"

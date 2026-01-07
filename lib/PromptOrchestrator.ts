@@ -294,7 +294,7 @@ function createErrorHTML(
       <ul class="model-list">
         ${availableModels.slice(0, 10).map(m => `<li><code>${escapeHtml(m)}</code></li>`).join('')}
       </ul>
-      <p class="hint">💡 Set <code>LLM_MODEL</code> in .env to one of these model IDs</p>
+      <p class="hint"> Set <code>LLM_MODEL</code> in .env to one of these model IDs</p>
     </div>`
     : '<p class="warning">Could not fetch available models from API</p>';
 
@@ -322,7 +322,7 @@ function createErrorHTML(
 </head>
 <body>
   <div class="container">
-    <h1>⚠️ LLM Error</h1>
+    <h1> LLM Error</h1>
     <div class="section">
       <h3>Configuration</h3>
       <div class="meta"><strong>Provider:</strong> ${escapeHtml(provider)}</div>
