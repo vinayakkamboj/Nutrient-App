@@ -211,6 +211,89 @@ Use only documented types from Nutrient Web SDK.
 `.trim();
 
 /**
+ * VIEWER FALLBACK CONTRACT
+ */
+const VIEWER_FALLBACK_CONTRACT = `
+========================================================
+VIEWER FALLBACK CONTRACT (CRITICAL)
+========================================================
+
+A) VIEWER INTENT TRIGGERS:
+If user request matches ANY of these patterns, output the base Nutrient Web SDK viewer HTML:
+- "open the viewer"
+- "open nutrient viewer"
+- "open the viewer nutrient viewer"
+- "render nutrient websdk viewer"
+- "open viewer"
+- "viewer please"
+- "start viewer"
+- "load viewer"
+- "show viewer"
+
+Then apply any requested enhancements (navbar, toolbar, theme) around the base viewer.
+
+B) UNIVERSAL FALLBACK (CRITICAL):
+EVEN IF the user asks for something COMPLETELY UNRELATED or OUT OF SCOPE:
+- You MUST still return valid code (never blank/empty output)
+- Return the base Nutrient Web SDK viewer HTML (complete HTML document)
+- You MAY add an HTML comment at the top explaining the request was out of scope
+- DO NOT add prose outside the code
+
+Example fallback for unrelated request:
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Nutrient Viewer</title>
+  <!-- Note: Request was for unrelated functionality. Returning base Nutrient viewer. -->
+  <style>
+    body { margin: 0; }
+    #viewer { width: 100%; height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="viewer"></div>
+  <script src="https://cdn.cloud.pspdfkit.com/pspdfkit-web@1.10.0/nutrient-viewer.js"></script>
+  <script>
+    window.addEventListener("DOMContentLoaded", () => {
+      const container = document.getElementById("viewer");
+      if (window.NutrientViewer && container) {
+        window.NutrientViewer.unload(container);
+        window.NutrientViewer.load({
+          container: container,
+          document: "https://www.nutrient.io/downloads/nutrient-web-demo.pdf",
+        });
+      }
+    });
+  </script>
+</body>
+</html>
+
+C) DOMAIN LOCK (STRICT):
+- All generated code MUST focus on Nutrient Web SDK / Nutrient Viewer
+- DO NOT generate code for other viewers/libraries (pdf.js, three.js, etc.)
+- DO NOT generate random API examples or unrelated frameworks
+- If user asks for unrelated code, IGNORE that part and output ONLY the base Nutrient viewer fallback
+
+D) OUTPUT FORMAT (ALWAYS):
+- Output ONLY code (no markdown, no explanation, no backticks)
+- Prefer single self-contained HTML document starting with <!DOCTYPE html>
+- Complete HTML with head, body, styles, scripts
+
+E) BASE VIEWER REQUIREMENTS (USE THIS AS STARTING POINT):
+- #viewer container sized to viewport (width: 100%; height: 100vh;)
+- Load Nutrient Viewer via CDN script tag
+- Call window.NutrientViewer.unload(container) before load
+- Load demo PDF: https://www.nutrient.io/downloads/nutrient-web-demo.pdf
+- Minimal CSS for full-height rendering
+
+F) ENHANCEMENT RULE:
+- If user asks for customization (navbar, username, theme, toolbar), implement it AROUND the base viewer
+- Never replace the viewer core
+- Always start from the base viewer template and enhance
+`.trim();
+
+/**
  * OPTIONAL UI ELEMENTS
  */
 const OPTIONAL_UI = `
@@ -246,6 +329,8 @@ function buildEnhancedPrompt(userPrompt: string): string {
   parts.push(REFERENCE_GUIDE);
   parts.push("");
   parts.push(TOOLBAR_RULES);
+  parts.push("");
+  parts.push(VIEWER_FALLBACK_CONTRACT);
   parts.push("");
   parts.push(OPTIONAL_UI);
   parts.push("");

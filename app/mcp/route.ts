@@ -306,11 +306,11 @@ const handler = createMcpHandler(async (server: any) => {
             /* Details Drawer */
             .details-drawer {
               position: fixed;
-              top: 0;
+              top: var(--brand-header-height, 0px);
               right: 0;
               width: 420px;
               max-width: 90vw;
-              height: 100vh;
+              height: calc(100vh - var(--brand-header-height, 0px));
               background: #2a2424;
               border-left: 1px solid #3a3434;
               transform: translateX(100%);
@@ -513,6 +513,22 @@ const handler = createMcpHandler(async (server: any) => {
             }
 
             (function() {
+              // Dynamic brand header height measurement
+              function updateBrandHeaderHeight() {
+                const brandHeader = document.querySelector('.brand-header');
+                if (brandHeader) {
+                  const height = brandHeader.offsetHeight;
+                  document.documentElement.style.setProperty('--brand-header-height', height + 'px');
+                } else {
+                  document.documentElement.style.setProperty('--brand-header-height', '0px');
+                }
+              }
+
+              // Update on load and resize
+              updateBrandHeaderHeight();
+              window.addEventListener('resize', updateBrandHeaderHeight);
+              window.addEventListener('load', updateBrandHeaderHeight);
+
               // Element references
               const userContent = document.getElementById('content-user');
               const enhancedContent = document.getElementById('content-enhanced');
