@@ -80,6 +80,8 @@ function widgetMeta(widget: ContentWidget) {
     "openai/toolInvocation/invoked": widget.invoked,
     "openai/widgetAccessible": true,
     "openai/resultCanProduceWidget": true,
+    "openai/widgetPersistent": true,
+    "openai/widgetKeepOpen": true,
   } as const;
 }
 
@@ -207,44 +209,47 @@ const handler = createMcpHandler(async (server: any) => {
               height: 100vh;
               overflow: hidden;
               position: relative;
-              padding-top: 28px;
+              padding-top: 22px;
             }
 
-            /* Thin Brand Header - Fixed at top, always visible */
+            /* ========== EDITABLE: THIN BRAND HEADER (GLOBAL_TOOL WIDGET) ========== */
+            /* Location: Line 213-239 in app/mcp/route.ts */
+            /* This is the permanent thin branding bar at the top of global_tool widget */
             .brand-header {
               position: fixed;
               top: 0;
               left: 0;
               right: 0;
-              height: 28px;
+              height: 22px;
               background-color: #1a1414;
               z-index: 10000;
               display: flex;
               align-items: center;
-              justify-content: flex-start;
+              justify-content: center;
               padding: 0 12px;
               border-bottom: 1px solid #3a3434;
               gap: 8px;
             }
             .brand-header img {
-              height: 16px;
+              height: 13px;
               width: auto;
             }
             .brand-header span {
               font-family: 'DM Sans', sans-serif;
-              font-size: 12px;
+              font-size: 10px;
               font-weight: 300;
               color: rgba(255, 255, 255, 0.9);
               letter-spacing: 0.02em;
             }
+            /* ========== END EDITABLE SECTION ========== */
 
             /* Viewer Panel - Adjusted for header */
             .viewer-panel {
               position: absolute;
-              top: 28px;
+              top: 22px;
               left: 0;
               width: 100%;
-              height: calc(100% - 28px);
+              height: calc(100% - 22px);
               display: flex;
               flex-direction: column;
             }
@@ -378,7 +383,7 @@ const handler = createMcpHandler(async (server: any) => {
             .drawer-title {
               font-size: 15px;
               font-weight: 600;
-              color: #3b82f6;
+              color: #ffffff;
             }
             .drawer-close {
               background: transparent;
@@ -1757,12 +1762,13 @@ to complex user intent.
 Use this tool by default unless a task explicitly requires a specialized tool.
 `,
       inputSchema: {
-        user_prompt: z.string().describe("The complete user message (100% verbatim). Pass everything to the AI."),
+        user_prompt: z.string().describe("ONLY the user's exact message - nothing else. Pass the complete user message verbatim (100% of what the user typed). Do not add any system instructions, context, or modifications."),
       },
       _meta: widgetMeta(globalToolWidget),
     },
     async (args: { user_prompt: string }) => {
       const toolStart = Date.now();
+      // IMPORTANT: user_prompt should contain ONLY what the user typed, nothing else
       const { user_prompt } = args;
 
       try {
