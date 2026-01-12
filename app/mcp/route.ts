@@ -1787,7 +1787,7 @@ Use this tool by default unless a task explicitly requires a specialized tool.
           content: [
             {
               type: "text",
-              text: `✅ AI-generated response using ${result.provider} (${result.model_used})\n\n📝 Your request: "${user_prompt}"\n\n${statusLines || "✨ Response generated successfully"}`,
+              text: `✅ Generated using ${result.provider} (${result.model_used})\n\n💡 The generated code is displayed in the widget viewer above.\n${statusLines ? "\n" + statusLines : ""}`,
             },
           ],
           structuredContent: {

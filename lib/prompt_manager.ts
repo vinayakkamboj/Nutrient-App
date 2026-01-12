@@ -181,6 +181,32 @@ TOOLBAR CUSTOMIZATION:
 Document editor: PSPDFKit.defaultDocumentEditorToolbarItems.filter(...) + custom items
 Main toolbar: instance.setToolbarItems(...)
 
+FORM FILLING:
+Nutrient Web SDK supports programmatic PDF form filling via Instant JSON.
+Use the instantJSON configuration option during load to pre-fill form fields.
+
+Pattern for form filling:
+1. Map user data to form field names
+2. Create Instant JSON structure with formFieldValues
+3. Load document with instantJSON option
+
+Example:
+const instantJSON = {
+  format: "https://pspdfkit.com/instant-json/v1",
+  formFieldValues: [
+    { v: 1, type: "pspdfkit/form-field-value", name: "firstName", value: "John" },
+    { v: 1, type: "pspdfkit/form-field-value", name: "lastName", value: "Doe" },
+    { v: 1, type: "pspdfkit/form-field-value", name: "email", value: "john@example.com" },
+    { v: 1, type: "pspdfkit/form-field-value", name: "dateField", value: "2024-01-15" }
+  ]
+};
+
+window.NutrientViewer.load({
+  container: container,
+  document: "your-form.pdf",
+  instantJSON: instantJSON
+});
+
 DOCS: https://www.nutrient.io/sdk/web/getting-started/
 `.trim();
 
@@ -315,6 +341,120 @@ DEFAULT:
 `.trim();
 
 /**
+ * FORM FILLING GUIDE
+ */
+const FORM_FILLING_GUIDE = `
+========================================================
+PDF FORM FILLING GUIDE
+========================================================
+
+When user provides data to fill into a PDF form:
+1. Extract data from user prompt (look for key-value pairs, structured data)
+2. Map data to reasonable form field names (firstName, lastName, email, etc.)
+3. Create Instant JSON structure
+4. Load viewer with instantJSON option
+
+INSTANT JSON STRUCTURE:
+{
+  "format": "https://pspdfkit.com/instant-json/v1",
+  "formFieldValues": [
+    {
+      "v": 1,
+      "type": "pspdfkit/form-field-value",
+      "name": "fieldName",
+      "value": "fieldValue"
+    }
+  ]
+}
+
+COMPLETE FORM FILLING EXAMPLE:
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Form Filler</title>
+  <style>
+    body { margin: 0; }
+    #viewer { width: 100%; height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="viewer"></div>
+  <script src="https://cdn.cloud.pspdfkit.com/pspdfkit-web@1.10.0/nutrient-viewer.js"></script>
+  <script>
+    window.addEventListener("DOMContentLoaded", () => {
+      const container = document.getElementById("viewer");
+
+      // User data extracted from prompt
+      const formData = {
+        firstName: "John",
+        lastName: "Doe",
+        email: "john.doe@example.com",
+        phone: "+1-555-0123",
+        address: "123 Main St",
+        city: "San Francisco",
+        state: "CA",
+        zipCode: "94102",
+        dateOfBirth: "1990-05-15",
+        ssn: "XXX-XX-1234"
+      };
+
+      // Convert to Instant JSON format
+      const instantJSON = {
+        format: "https://pspdfkit.com/instant-json/v1",
+        formFieldValues: Object.keys(formData).map(fieldName => ({
+          v: 1,
+          type: "pspdfkit/form-field-value",
+          name: fieldName,
+          value: formData[fieldName]
+        }))
+      };
+
+      if (window.NutrientViewer && container) {
+        window.NutrientViewer.unload(container);
+        window.NutrientViewer.load({
+          container: container,
+          document: "https://www.nutrient.io/downloads/nutrient-web-demo.pdf",
+          instantJSON: instantJSON
+        });
+      }
+    });
+  </script>
+</body>
+</html>
+
+FORM DATA EXTRACTION PATTERNS:
+- User says: "Fill form with name John Doe, email john@example.com"
+  Extract: { name: "John Doe", email: "john@example.com" }
+
+- User says: "Name: Alice Smith, DOB: 1985-03-20, Address: 456 Oak Ave"
+  Extract: { name: "Alice Smith", dateOfBirth: "1985-03-20", address: "456 Oak Ave" }
+
+- User provides JSON: { "firstName": "Bob", "lastName": "Johnson" }
+  Use as-is: { firstName: "Bob", lastName: "Johnson" }
+
+FIELD NAME MAPPING (if user doesn't specify exact field names):
+- Name/Full Name → firstName, lastName, or fullName
+- Email/E-mail → email
+- Phone/Telephone → phone or phoneNumber
+- Date of Birth/DOB/Birthday → dateOfBirth or dob
+- Address/Street → address or streetAddress
+- City → city
+- State/Province → state
+- ZIP/Postal Code → zipCode or postalCode
+- Social Security Number/SSN → ssn
+
+IMPORTANT NOTES:
+- If user provides a PDF URL, use it in the document parameter
+- If no PDF URL provided, use demo PDF: https://www.nutrient.io/downloads/nutrient-web-demo.pdf
+- Always wrap field values as strings in Instant JSON
+- Date format: Use ISO format (YYYY-MM-DD) when possible
+- Checkbox fields: Use boolean values (true/false)
+- If user asks to "extract and fill", explain that extraction requires backend processing
+  and show how to fill with provided data instead
+`.trim();
+
+/**
  * Helper: builds the enhanced prompt
  */
 function buildEnhancedPrompt(userPrompt: string): string {
@@ -329,6 +469,8 @@ function buildEnhancedPrompt(userPrompt: string): string {
   parts.push(REFERENCE_GUIDE);
   parts.push("");
   parts.push(TOOLBAR_RULES);
+  parts.push("");
+  parts.push(FORM_FILLING_GUIDE);
   parts.push("");
   parts.push(VIEWER_FALLBACK_CONTRACT);
   parts.push("");
@@ -347,6 +489,7 @@ function buildEnhancedPrompt(userPrompt: string): string {
   parts.push("- Start with <!DOCTYPE html> for HTML widgets");
   parts.push("- Use // FILE: comments for multi-file Next.js output");
   parts.push("- Output ONLY executable code or comment block for out-of-scope");
+  parts.push("- For form filling: extract data from user prompt and use instantJSON");
   parts.push("");
   parts.push("Generate the code now:");
 
