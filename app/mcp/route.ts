@@ -2090,7 +2090,7 @@ Example: To keep only thumbnails and download, use action "keep_only" with tools
   console.log(`[MCP Init] ✅ COMPLETE - Total initialization: ${totalTime}ms`);
 
   if (totalTime > 1000) {
-    console.warn(`[MCP Init] ⚠️  WARNING: MCP init took ${totalTime}ms (>1s). ChatGPT expects fast responses for action reload.`);
+    console.warn(`[MCP Init]  WARNING: MCP init took ${totalTime}ms (>1s). ChatGPT expects fast responses for action reload.`);
   }
 });
 
