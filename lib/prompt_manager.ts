@@ -379,99 +379,53 @@ NAVBAR (ONLY IF REQUESTED):
 `.trim();
 
 /**
- * Detect keywords in user prompt
- */
-function detectIntent(prompt: string): {
-  fillForm: boolean;
-  createForm: boolean;
-  deletePages: boolean;
-  splitPdf: boolean;
-  mergePdf: boolean;
-  imageToPdf: boolean;
-  officeToPdf: boolean;
-  navbar: boolean;
-  simple: boolean;
-} {
-  const lower = prompt.toLowerCase();
-
-  return {
-    fillForm: /fill.*form|populate.*form|prefill|set.*field|form.*data|instant.*json|fill.*field/i.test(lower),
-    createForm: /create.*field|add.*field|design.*form|form.*design|widget.*annotation/i.test(lower),
-    deletePages: /delete.*page|remove.*page|keep.*page/i.test(lower),
-    splitPdf: /split.*pdf|divide.*pdf|split.*document/i.test(lower),
-    mergePdf: /merge.*pdf|combine.*pdf|join.*pdf|import.*document/i.test(lower),
-    imageToPdf: /image.*to.*pdf|convert.*image|png.*to.*pdf|jpg.*to.*pdf|picture.*to.*pdf/i.test(lower),
-    officeToPdf: /docx.*to.*pdf|word.*to.*pdf|office.*to.*pdf|convert.*docx|convert.*word/i.test(lower),
-    navbar: /navbar|nav.*bar|header|top.*bar|navigation/i.test(lower),
-    simple: lower.length < 50 && !(/fill|create|merge|split|delete|remove|convert|navbar/i.test(lower))
-  };
-}
-
-/**
- * Build smart dynamic prompt
+ * Build enhanced prompt - STATIC: Always includes ALL examples
  */
 function buildEnhancedPrompt(userPrompt: string, pdfUrl?: string): string {
-  const intent = detectIntent(userPrompt);
   const parts: string[] = [];
 
-  // ALWAYS: Core rules
+  // Core rules
   parts.push(CORE_RULES);
   parts.push("");
 
-  // ALWAYS: Base viewer
+  // Base viewer
   parts.push(BASE_VIEWER);
   parts.push("");
 
-  // CONDITIONAL: Only add relevant code samples based on detected keywords
-  if (intent.fillForm) {
-    parts.push("FORM FILLING:");
-    parts.push(FORM_FILLING_CODE);
-    parts.push("");
-  }
+  // ALL CODE SAMPLES - NO CONDITIONS
+  parts.push("FORM FILLING:");
+  parts.push(FORM_FILLING_CODE);
+  parts.push("");
 
-  if (intent.createForm) {
-    parts.push("CREATE FORM FIELDS:");
-    parts.push(CREATE_FORM_CODE);
-    parts.push("");
-  }
+  parts.push("CREATE FORM FIELDS:");
+  parts.push(CREATE_FORM_CODE);
+  parts.push("");
 
-  if (intent.deletePages) {
-    parts.push("DELETE PAGES:");
-    parts.push(DELETE_PAGES_CODE);
-    parts.push("");
-  }
+  parts.push("DELETE PAGES:");
+  parts.push(DELETE_PAGES_CODE);
+  parts.push("");
 
-  if (intent.splitPdf) {
-    parts.push("SPLIT PDF:");
-    parts.push(SPLIT_PDF_CODE);
-    parts.push("");
-  }
+  parts.push("SPLIT PDF:");
+  parts.push(SPLIT_PDF_CODE);
+  parts.push("");
 
-  if (intent.mergePdf) {
-    parts.push("MERGE PDFs:");
-    parts.push(MERGE_PDF_CODE);
-    parts.push("");
-  }
+  parts.push("MERGE PDFs:");
+  parts.push(MERGE_PDF_CODE);
+  parts.push("");
 
-  if (intent.imageToPdf) {
-    parts.push("IMAGE TO PDF:");
-    parts.push(IMAGE_TO_PDF_CODE);
-    parts.push("");
-  }
+  parts.push("IMAGE TO PDF:");
+  parts.push(IMAGE_TO_PDF_CODE);
+  parts.push("");
 
-  if (intent.officeToPdf) {
-    parts.push("OFFICE TO PDF:");
-    parts.push(OFFICE_TO_PDF_CODE);
-    parts.push("");
-  }
+  parts.push("OFFICE TO PDF:");
+  parts.push(OFFICE_TO_PDF_CODE);
+  parts.push("");
 
-  if (intent.navbar) {
-    parts.push("NAVBAR (ONLY IF REQUESTED):");
-    parts.push(NAVBAR_CODE);
-    parts.push("");
-  }
+  parts.push("NAVBAR:");
+  parts.push(NAVBAR_CODE);
+  parts.push("");
 
-  // CRITICAL: PDF URL injection
+  // PDF URL
   if (pdfUrl) {
     parts.push("UPLOADED PDF:");
     parts.push(`USER UPLOADED: ${pdfUrl}`);
@@ -479,7 +433,7 @@ function buildEnhancedPrompt(userPrompt: string, pdfUrl?: string): string {
     parts.push("");
   }
 
-  // PRINCIPLE CHECK
+  // Principles
   parts.push("PRINCIPLE:");
   parts.push("- If request is BEYOND Nutrient Web SDK, output HTML comment: <!-- OUT_OF_SCOPE: reason -->");
   parts.push("- If request is SIMPLE/NO DETAIL, just open viewer with uploaded PDF");

@@ -736,14 +736,35 @@ const handler = createMcpHandler(async (server: any) => {
             const response = await fetch(\`${baseURL}/api/upload-pdf\`, {
               method: 'POST',
               body: formData
+            }).catch(err => {
+              console.error('Fetch failed:', err);
+              throw new Error('Network error: Could not reach upload server');
             });
 
             console.log('Upload response status:', response.status);
 
-            const result = await response.json();
-            console.log('Upload result:', result);
+            if (!response.ok) {
+              // Try to get error message from response
+              let errorMsg = 'Upload failed';
+              try {
+                const errorData = await response.json();
+                errorMsg = errorData.error || errorMsg;
+              } catch (e) {
+                // If JSON parsing fails, just use generic message
+              }
+              throw new Error(errorMsg);
+            }
 
-            if (!response.ok || result.error) {
+            let result;
+            try {
+              result = await response.json();
+              console.log('Upload result:', result);
+            } catch (e) {
+              console.error('JSON parse failed:', e);
+              throw new Error('Server returned invalid response');
+            }
+
+            if (!result.success) {
               throw new Error(result.error || 'Upload failed');
             }
 
@@ -765,31 +786,17 @@ const handler = createMcpHandler(async (server: any) => {
                   processingScreen.classList.add('active');
                   statusText.textContent = 'Enhancing prompt...';
 
-                  // DEBUG: Check what's in toolOutput
-                  console.log('=== DEBUG TOOL OUTPUT ===');
-                  console.log('window.openai:', window.openai);
-                  console.log('window.openai.toolOutput:', window.openai?.toolOutput);
-                  console.log('window.openai.toolOutput.global_tool:', window.openai?.toolOutput?.global_tool);
-
-                  // Get the EXACT user prompt from ChatGPT (read DIRECTLY from toolOutput)
+                  // Get user prompt from ChatGPT
                   const toolOutput = window.openai?.toolOutput?.global_tool;
-                  const userPromptFromChatGPT = toolOutput?.user_prompt;
+                  let userPromptFromChatGPT = toolOutput?.user_prompt;
 
-                  console.log('Starting automatic processing with PDF:', pdfUrl);
-                  console.log('User prompt captured:', userPromptFromChatGPT);
-                  console.log('User prompt type:', typeof userPromptFromChatGPT);
-                  console.log('User prompt is empty?', !userPromptFromChatGPT);
-
-                  if (!userPromptFromChatGPT) {
-                    console.error('ERROR: User prompt not found in toolOutput! Using fallback.');
-                  }
-
-                  // CRITICAL: Must have user prompt
+                  // Use fallback if not captured
                   if (!userPromptFromChatGPT || userPromptFromChatGPT.trim() === '') {
-                    throw new Error('CRITICAL ERROR: No user prompt captured from ChatGPT. Please tell ChatGPT what you want to do with the PDF.');
+                    userPromptFromChatGPT = 'Open the uploaded PDF in the Nutrient viewer';
                   }
 
-                  console.log('Sending to API with user_prompt:', userPromptFromChatGPT);
+                  console.log('Processing with PDF:', pdfUrl);
+                  console.log('User prompt:', userPromptFromChatGPT);
 
                   // Call processing API with the uploaded PDF URL and EXACT USER PROMPT
                   const processResponse = await fetch(\`${baseURL}/api/process-pdf\`, {
@@ -862,8 +869,12 @@ const handler = createMcpHandler(async (server: any) => {
                     throw new Error('No viewer HTML generated');
                   }
                 } catch (processingError) {
-                  console.error('Processing error:', processingError);
-                  viewerContainer.innerHTML = '<div class="viewer-empty">Error processing PDF. Please try again.</div>';
+                  console.error('=== PROCESSING ERROR ===');
+                  console.error('Error:', processingError);
+                  const errorMsg = processingError instanceof Error ? processingError.message : 'Unknown error';
+                  console.error('Error message:', errorMsg);
+
+                  viewerContainer.innerHTML = '<div class="viewer-empty">Processing failed: ' + errorMsg + '</div>';
                   loadingOverlay.classList.add('hidden');
                 }
               }, 500);

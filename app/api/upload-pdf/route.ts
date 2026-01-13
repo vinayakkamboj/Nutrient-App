@@ -2,27 +2,34 @@ import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
-import { baseURL } from "@/baseUrl";
+
+// Inline baseURL to avoid import issues
+const baseURL = process.env.NODE_ENV === "development"
+  ? "http://localhost:3000"
+  : `https://${process.env.VERCEL_URL || "localhost:3000"}`;
 
 export async function POST(request: NextRequest) {
-  console.log("[Upload API] Received upload request");
-
+  // ALWAYS return JSON, even on catastrophic failure
   try {
-    console.log("[Upload API] Parsing form data...");
-    const formData = await request.formData();
-    const file = formData.get("file") as File | null;
+    console.log("[Upload API] START");
 
-    console.log("[Upload API] File received:", file ? `${file.name} (${file.size} bytes, ${file.type})` : "null");
-
-    if (!file) {
-      console.log("[Upload API] No file provided");
-      return NextResponse.json(
-        { success: false, error: "No file provided" },
-        { status: 400 }
-      );
+    let formData;
+    try {
+      formData = await request.formData();
+    } catch (e) {
+      console.error("[Upload API] FormData parse failed:", e);
+      return NextResponse.json({ success: false, error: "Failed to parse form data" });
     }
 
-    // Validate file type
+    const file = formData.get("file") as File | null;
+
+    if (!file) {
+      console.log("[Upload API] No file");
+      return NextResponse.json({ success: false, error: "No file provided" });
+    }
+
+    console.log(`[Upload API] File: ${file.name} (${file.size} bytes)`);
+
     const allowedTypes = [
       "application/pdf",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -35,41 +42,39 @@ export async function POST(request: NextRequest) {
     ];
 
     if (!allowedTypes.includes(file.type)) {
-      console.log("[Upload API] Invalid file type:", file.type);
-      return NextResponse.json(
-        { success: false, error: `Invalid file type: ${file.type}. Only PDF, Office docs, and images allowed.` },
-        { status: 400 }
-      );
+      console.log("[Upload API] Invalid type:", file.type);
+      return NextResponse.json({ success: false, error: "Invalid file type" });
     }
 
-    console.log("[Upload API] File type valid, proceeding with upload...");
-
-    // Create uploads directory if it doesn't exist
     const uploadsDir = path.join(process.cwd(), "public", "uploads");
-    if (!existsSync(uploadsDir)) {
-      console.log("[Upload API] Creating uploads directory:", uploadsDir);
-      await mkdir(uploadsDir, { recursive: true });
+
+    try {
+      if (!existsSync(uploadsDir)) {
+        console.log("[Upload API] Creating uploads dir");
+        await mkdir(uploadsDir, { recursive: true });
+      }
+    } catch (e) {
+      console.error("[Upload API] Failed to create directory:", e);
+      return NextResponse.json({ success: false, error: "Failed to create upload directory" });
     }
 
-    // Generate unique filename
     const timestamp = Date.now();
     const randomString = Math.random().toString(36).substring(7);
     const fileExtension = path.extname(file.name);
     const fileName = `${timestamp}-${randomString}${fileExtension}`;
     const filePath = path.join(uploadsDir, fileName);
 
-    console.log("[Upload API] Saving file to:", filePath);
+    try {
+      const bytes = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      await writeFile(filePath, buffer);
+    } catch (e) {
+      console.error("[Upload API] Failed to write file:", e);
+      return NextResponse.json({ success: false, error: "Failed to save file" });
+    }
 
-    // Convert file to buffer and save
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    await writeFile(filePath, buffer);
-
-    // Generate public URL
     const fileUrl = `${baseURL}/uploads/${fileName}`;
-
-    console.log("[Upload API] File uploaded successfully:", fileUrl);
-    console.log("[Upload API] Returning success response");
+    console.log(`[Upload API] Success: ${fileUrl}`);
 
     return NextResponse.json({
       success: true,
@@ -80,15 +85,14 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error("[Upload API] ERROR:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json(
-      { success: false, error: `Upload failed: ${errorMessage}` },
-      { status: 500 }
-    );
+    // CATASTROPHIC ERROR - still return JSON
+    console.error("[Upload API] CATASTROPHIC ERROR:", error);
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error"
+    });
   }
 }
 
-// App Router config for file uploads (10MB max)
 export const runtime = 'nodejs';
 export const maxDuration = 60;
