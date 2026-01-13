@@ -1,17 +1,15 @@
 /**
- * prompt_manager.ts
+ * prompt_manager.ts - Smart Dynamic Nutrient Web SDK Prompt Manager
  *
- * Enhanced Prompt Manager for Nutrient Web SDK widget code generation.
- *
- * Design Goals:
- * - CODE-ONLY output (zero prose, zero markdown)
- * - Domain lock: Nutrient Web SDK only
- * - Widget-safe execution (CDN-based, no bundlers in HTML mode)
- * - Deterministic, executable code that loads viewer properly
+ * DESIGN:
+ * - SMALL PROMPTS: Only inject relevant code samples based on detected keywords
+ * - CODE-FOCUSED: Real code examples, minimal documentation
+ * - PRINCIPLE: Beyond Nutrient = reject; No detail = just open viewer with PDF
  */
 
 export interface PromptManagerInput {
   user_prompt: string;
+  pdf_url?: string;
 }
 
 export interface PromptManagerOutput {
@@ -20,478 +18,477 @@ export interface PromptManagerOutput {
 }
 
 /**
- * CODE-ONLY OUTPUT ENFORCEMENT
+ * CORE RULES - Always included
  */
-const CODE_ONLY_RULES = `
-========================================================
-CRITICAL: CODE-ONLY OUTPUT RULE
-========================================================
+const CORE_RULES = `
+CODE-ONLY OUTPUT. NO PROSE. NO MARKDOWN.
 
-YOU MUST OUTPUT CODE ONLY. ABSOLUTELY NO PROSE.
-
-FORBIDDEN:
-- NO markdown code fences (\`\`\`html, \`\`\`typescript, etc.)
-- NO headings (# Heading, ## Subheading)
-- NO bullet points or numbered lists
-- NO explanations or descriptions
-- NO "Here is...", "This code...", or any prose
-- NO surrounding text whatsoever
-
-ALLOWED OUTPUT FORMATS:
-
-1) HTML WIDGET (default for most requests):
-   - Start immediately with: <!DOCTYPE html>
-   - Complete, self-contained HTML document
-   - No markdown, no explanations
-   - Example:
-     <!DOCTYPE html>
-     <html lang="en">
-     <head>
-       <meta charset="UTF-8">
-       <title>Viewer</title>
-       <style>
-         body { margin: 0; }
-         #viewer { width: 100%; height: 100vh; }
-       </style>
-     </head>
-     <body>
-       <div id="viewer"></div>
-       <script src="https://cdn.cloud.pspdfkit.com/pspdfkit-web@1.10.0/nutrient-viewer.js"></script>
-       <script>
-         window.addEventListener("DOMContentLoaded", () => {
-           const container = document.getElementById("viewer");
-           if (window.NutrientViewer && container) {
-             window.NutrientViewer.unload(container);
-             window.NutrientViewer.load({
-               container: container,
-               document: "https://www.nutrient.io/downloads/nutrient-web-demo.pdf",
-             });
-           }
-         });
-       </script>
-     </body>
-     </html>
-
-2) NEXT.JS / TYPESCRIPT MULTI-FILE (only if user explicitly requests):
-   - Separate files with line comments ONLY
-   - Format:
-     // FILE: app/layout.tsx
-     <code here>
-     // FILE: global.d.ts
-     <code here>
-     // FILE: app/page.tsx
-     <code here>
-   - Still CODE ONLY (no prose, no markdown)
-
-3) OUT OF SCOPE (if request is not about Nutrient Web SDK):
-   - Output ONLY a comment block:
-     /*
-       OUT_OF_SCOPE: <reason in 5 words or less>
-       RELEVANT DOCS (plain text):
-       https://www.nutrient.io/sdk/web/getting-started/nextjs/
-       https://www.nutrient.io/sdk/web/getting-started/typescript/
-       SUGGESTED SEARCH QUERIES:
-       - Nutrient Web SDK viewer CDN
-       - Nutrient toolbar customization
-     */
-
-DEFAULT BEHAVIOR:
-- If user asks to "load viewer" or similar: output HTML widget (format 1)
-- If user explicitly asks for Next.js/TypeScript: output multi-file (format 2)
-- Otherwise: output HTML widget (format 1)
+RULES:
+1. OUTPUT COMPLETE HTML STARTING WITH: <!DOCTYPE html>
+2. MAIN UI = NUTRIENT WEB SDK VIEWER ONLY
+3. NO OTHER PDF LIBRARIES (no pdf.js, jsPDF, pdf-lib, etc.)
+4. CDN: <script src="https://cdn.cloud.pspdfkit.com/pspdfkit-web@1.10.0/nutrient-viewer.js"></script>
+5. USE: const { NutrientViewer } = window;
 `.trim();
 
 /**
- * DOMAIN LOCK: Nutrient Web SDK ONLY
+ * BASE VIEWER - Always included
  */
-const DOMAIN_LOCK = `
-========================================================
-DOMAIN LOCK: NUTRIENT WEB SDK ONLY
-========================================================
+const BASE_VIEWER = `
+BASE VIEWER TEMPLATE:
 
-YOU MUST ONLY GENERATE CODE FOR:
-- Nutrient Web SDK (window.NutrientViewer)
-- Viewer loading and configuration
-- Toolbar manipulation (viewer toolbar, document editor toolbar)
-- Annotations
-- Document editor toolbar/footer customization
-
-FORBIDDEN:
-- Other PDF libraries (pdf.js, PDF-LIB, etc.)
-- Hallucinated APIs not in Nutrient Web SDK
-- Non-Nutrient functionality
-
-CDN METHOD ONLY:
-- Entry point: window.NutrientViewer
-- Load: window.NutrientViewer.load({...})
-- Unload: window.NutrientViewer.unload(container)
-- No npm imports in HTML mode
-- No bundlers in HTML widget mode
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Viewer</title>
+  <style>
+    body { margin: 0; }
+    #viewer { width: 100%; height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="viewer"></div>
+  <script src="https://cdn.cloud.pspdfkit.com/pspdfkit-web@1.10.0/nutrient-viewer.js"></script>
+  <script>
+    (async function() {
+      const { NutrientViewer } = window;
+      const container = document.getElementById("viewer");
+      const instance = await NutrientViewer.load({
+        container,
+        document: "document.pdf"
+      });
+    })();
+  </script>
+</body>
+</html>
 `.trim();
 
 /**
- * VIEWER LOADING CONTRACT
+ * FORM FILLING CODE - Only when detected
  */
-const VIEWER_CONTRACT = `
-========================================================
-VIEWER LOADING CONTRACT (CDN)
-========================================================
+const FORM_FILLING_CODE = `
+FORM FILLING EXAMPLES:
 
-REQUIRED PATTERN:
+A) Direct fill with setFormFieldValues:
 
-1) Include CDN script:
-   <script src="https://cdn.cloud.pspdfkit.com/pspdfkit-web@1.10.0/nutrient-viewer.js"></script>
-
-2) Container MUST have explicit dimensions:
-   <div id="viewer" style="width: 100%; height: 100vh;"></div>
-
-3) Load pattern:
-   const container = document.getElementById("viewer");
-   if (window.NutrientViewer && container) {
-     window.NutrientViewer.unload(container);  // Always unload first
-     window.NutrientViewer.load({
-       container: container,
-       document: "https://www.nutrient.io/downloads/nutrient-web-demo.pdf",
-     });
-   }
-
-4) Cleanup/reload:
-   window.NutrientViewer.unload(container);
-
-CRITICAL:
-- ALWAYS call unload before load
-- Container MUST have width and height
-- Use window.NutrientViewer (global object from CDN)
-`.trim();
-
-/**
- * REFERENCE GUIDE (embedded for model grounding, NOT for output)
- */
-const REFERENCE_GUIDE = `
-========================================================
-REFERENCE GUIDE (DO NOT OUTPUT THIS SECTION)
-========================================================
-
-NEXT.JS PATTERN:
-Layout: Use <Script src="https://cdn.cloud.pspdfkit.com/pspdfkit-web@1.10.0/nutrient-viewer.js" strategy="beforeInteractive"/>
-Types: declare global { interface Window { NutrientViewer?: typeof NutrientViewer; } }
-Viewer: useEffect(() => { NutrientViewer.unload(container); NutrientViewer.load({...}); }, []);
-
-TOOLBAR CUSTOMIZATION:
-Document editor: PSPDFKit.defaultDocumentEditorToolbarItems.filter(...) + custom items
-Main toolbar: instance.setToolbarItems(...)
-
-FORM FILLING:
-Nutrient Web SDK supports programmatic PDF form filling via Instant JSON.
-Use the instantJSON configuration option during load to pre-fill form fields.
-
-Pattern for form filling:
-1. Map user data to form field names
-2. Create Instant JSON structure with formFieldValues
-3. Load document with instantJSON option
-
-Example:
-const instantJSON = {
-  format: "https://pspdfkit.com/instant-json/v1",
-  formFieldValues: [
-    { v: 1, type: "pspdfkit/form-field-value", name: "firstName", value: "John" },
-    { v: 1, type: "pspdfkit/form-field-value", name: "lastName", value: "Doe" },
-    { v: 1, type: "pspdfkit/form-field-value", name: "email", value: "john@example.com" },
-    { v: 1, type: "pspdfkit/form-field-value", name: "dateField", value: "2024-01-15" }
-  ]
-};
-
-window.NutrientViewer.load({
-  container: container,
-  document: "your-form.pdf",
-  instantJSON: instantJSON
+const instance = await NutrientViewer.load({
+  container: document.getElementById("viewer"),
+  document: "form.pdf"
 });
 
-DOCS: https://www.nutrient.io/sdk/web/getting-started/
-`.trim();
+// Inspect all form fields (optional)
+const formFields = await instance.getFormFields();
+console.log("Form fields:", formFields.toJS?.() ?? formFields);
 
-/**
- * TOOLBAR BEHAVIOR RULES
- */
-const TOOLBAR_RULES = `
-========================================================
-TOOLBAR BEHAVIOR RULES
-========================================================
+// Fill by field name
+await instance.setFormFieldValues({
+  "Client first and last name": "Nutrient Web SDK",
+  "Description 1": "Loaded Nutrient Web SDK successfully",
+  "Description 2": "Printed out all form fields in the JS Console",
+  "Description 3": "Now filling out the form fields programmatically"
+});
 
-MAIN VIEWER TOOLBAR:
-- Access: instance.toolbarItems
-- Modify: instance.setToolbarItems([...])
-- Available after load completes
+console.log("Form filled");
 
-DOCUMENT EDITOR TOOLBAR:
-- Configure during load: documentEditorToolbarItems
-- Start from: PSPDFKit.defaultDocumentEditorToolbarItems
-- Filter, map, or add custom items
+B) Prefill at load with Instant JSON:
 
-DOCUMENT EDITOR FOOTER:
-- Configure during load: documentEditorFooterItems
-- Start from: PSPDFKit.defaultDocumentEditorFooterItems
-
-DO NOT INVENT TOOLBAR ITEM TYPES.
-Use only documented types from Nutrient Web SDK.
-`.trim();
-
-/**
- * VIEWER FALLBACK CONTRACT
- */
-const VIEWER_FALLBACK_CONTRACT = `
-========================================================
-VIEWER FALLBACK CONTRACT (CRITICAL)
-========================================================
-
-A) VIEWER INTENT TRIGGERS:
-If user request matches ANY of these patterns, output the base Nutrient Web SDK viewer HTML:
-- "open the viewer"
-- "open nutrient viewer"
-- "open the viewer nutrient viewer"
-- "render nutrient websdk viewer"
-- "open viewer"
-- "viewer please"
-- "start viewer"
-- "load viewer"
-- "show viewer"
-
-Then apply any requested enhancements (navbar, toolbar, theme) around the base viewer.
-
-B) UNIVERSAL FALLBACK (CRITICAL):
-EVEN IF the user asks for something COMPLETELY UNRELATED or OUT OF SCOPE:
-- You MUST still return valid code (never blank/empty output)
-- Return the base Nutrient Web SDK viewer HTML (complete HTML document)
-- You MAY add an HTML comment at the top explaining the request was out of scope
-- DO NOT add prose outside the code
-
-Example fallback for unrelated request:
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Nutrient Viewer</title>
-  <!-- Note: Request was for unrelated functionality. Returning base Nutrient viewer. -->
-  <style>
-    body { margin: 0; }
-    #viewer { width: 100%; height: 100vh; }
-  </style>
-</head>
-<body>
-  <div id="viewer"></div>
-  <script src="https://cdn.cloud.pspdfkit.com/pspdfkit-web@1.10.0/nutrient-viewer.js"></script>
-  <script>
-    window.addEventListener("DOMContentLoaded", () => {
-      const container = document.getElementById("viewer");
-      if (window.NutrientViewer && container) {
-        window.NutrientViewer.unload(container);
-        window.NutrientViewer.load({
-          container: container,
-          document: "https://www.nutrient.io/downloads/nutrient-web-demo.pdf",
-        });
+await NutrientViewer.load({
+  container: document.getElementById("viewer"),
+  document: "form.pdf",
+  instantJSON: {
+    format: "https://pspdfkit.com/instant-json/v1",
+    formFieldValues: [
+      {
+        name: "Form Field 1",
+        value: "Text for form field 1",
+        type: "pspdfkit/form-field-value",
+        v: 1
       }
-    });
-  </script>
-</body>
-</html>
-
-C) DOMAIN LOCK (STRICT):
-- All generated code MUST focus on Nutrient Web SDK / Nutrient Viewer
-- DO NOT generate code for other viewers/libraries (pdf.js, three.js, etc.)
-- DO NOT generate random API examples or unrelated frameworks
-- If user asks for unrelated code, IGNORE that part and output ONLY the base Nutrient viewer fallback
-
-D) OUTPUT FORMAT (ALWAYS):
-- Output ONLY code (no markdown, no explanation, no backticks)
-- Prefer single self-contained HTML document starting with <!DOCTYPE html>
-- Complete HTML with head, body, styles, scripts
-
-E) BASE VIEWER REQUIREMENTS (USE THIS AS STARTING POINT):
-- #viewer container sized to viewport (width: 100%; height: 100vh;)
-- Load Nutrient Viewer via CDN script tag
-- Call window.NutrientViewer.unload(container) before load
-- Load demo PDF: https://www.nutrient.io/downloads/nutrient-web-demo.pdf
-- Minimal CSS for full-height rendering
-
-F) ENHANCEMENT RULE:
-- If user asks for customization (navbar, username, theme, toolbar), implement it AROUND the base viewer
-- Never replace the viewer core
-- Always start from the base viewer template and enhance
+    ]
+  }
+});
 `.trim();
 
 /**
- * OPTIONAL UI ELEMENTS
+ * CREATE FORM FIELDS CODE - Only when detected
  */
-const OPTIONAL_UI = `
-========================================================
-OPTIONAL UI ELEMENTS
-========================================================
+const CREATE_FORM_CODE = `
+CREATE TEXT FIELD:
 
-NAVBAR / HEADER:
-- Include ONLY if user explicitly requests
-- If user asks to show their name: render a variable like userName
-- Example:
-  <div style="padding: 1rem; background: #333; color: white;">
-    Welcome, <span id="userName">User</span>
-  </div>
+const widget = new NutrientViewer.Annotations.WidgetAnnotation({
+  id: NutrientViewer.generateInstantId(),
+  pageIndex: 0,
+  formFieldName: "MyField",
+  boundingBox: new NutrientViewer.Geometry.Rect({ left: 100, top: 75, width: 200, height: 80 })
+});
 
-DEFAULT:
-- Minimal UI (viewer only)
-- No navbar unless requested
+const textField = new NutrientViewer.FormFields.TextFormField({
+  name: "MyField",
+  annotationIds: new NutrientViewer.Immutable.List([widget.id]),
+  value: "Default text"
+});
+
+await instance.create([widget, textField]);
+
+CREATE RADIO BUTTONS:
+
+const widget1 = new NutrientViewer.Annotations.WidgetAnnotation({
+  id: NutrientViewer.generateInstantId(),
+  pageIndex: 0,
+  formFieldName: "Choice",
+  boundingBox: new NutrientViewer.Geometry.Rect({ left: 100, top: 100, width: 20, height: 20 })
+});
+
+const widget2 = new NutrientViewer.Annotations.WidgetAnnotation({
+  id: NutrientViewer.generateInstantId(),
+  pageIndex: 0,
+  formFieldName: "Choice",
+  boundingBox: new NutrientViewer.Geometry.Rect({ left: 130, top: 100, width: 20, height: 20 })
+});
+
+const radioField = new NutrientViewer.FormFields.RadioButtonFormField({
+  name: "Choice",
+  annotationIds: new NutrientViewer.Immutable.List([widget1.id, widget2.id]),
+  options: new NutrientViewer.Immutable.List([
+    new NutrientViewer.FormOption({ label: "Option 1", value: "1" }),
+    new NutrientViewer.FormOption({ label: "Option 2", value: "2" })
+  ])
+});
+
+await instance.create([widget1, widget2, radioField]);
+
+CREATE CHECKBOX:
+
+const checkWidget = new NutrientViewer.Annotations.WidgetAnnotation({
+  id: NutrientViewer.generateInstantId(),
+  pageIndex: 0,
+  formFieldName: "Agree",
+  boundingBox: new NutrientViewer.Geometry.Rect({ left: 100, top: 200, width: 20, height: 20 })
+});
+
+const checkField = new NutrientViewer.FormFields.CheckBoxFormField({
+  name: "Agree",
+  annotationIds: new NutrientViewer.Immutable.List([checkWidget.id]),
+  options: new NutrientViewer.Immutable.List([
+    new NutrientViewer.FormOption({ label: "Yes", value: "1" })
+  ])
+});
+
+await instance.create([checkWidget, checkField]);
 `.trim();
 
 /**
- * FORM FILLING GUIDE
+ * DELETE PAGES CODE - Only when detected
  */
-const FORM_FILLING_GUIDE = `
-========================================================
-PDF FORM FILLING GUIDE
-========================================================
+const DELETE_PAGES_CODE = `
+DELETE PAGES EXAMPLES:
 
-When user provides data to fill into a PDF form:
-1. Extract data from user prompt (look for key-value pairs, structured data)
-2. Map data to reasonable form field names (firstName, lastName, email, etc.)
-3. Create Instant JSON structure
-4. Load viewer with instantJSON option
+const instance = await NutrientViewer.load({
+  container: document.getElementById("viewer"),
+  document: "input.pdf"
+});
 
-INSTANT JSON STRUCTURE:
-{
-  "format": "https://pspdfkit.com/instant-json/v1",
-  "formFieldValues": [
-    {
-      "v": 1,
-      "type": "pspdfkit/form-field-value",
-      "name": "fieldName",
-      "value": "fieldValue"
-    }
-  ]
+// Option 1: keepPages – remove everything except these pages
+await instance.applyOperations([
+  {
+    type: "keepPages",
+    pageIndexes: [0, 1, 2] // keep only pages 0–2
+  }
+]);
+
+// Option 2: removePages – remove specific pages
+// await instance.applyOperations([
+//   {
+//     type: "removePages",
+//     pageIndexes: [8, 9, 11] // remove pages 8, 9, 11
+//   }
+// ]);
+
+// Export the final PDF
+const buffer = await instance.exportPDF();
+console.log("Exported PDF buffer length:", buffer.byteLength);
+`.trim();
+
+/**
+ * SPLIT PDF CODE - Only when detected
+ */
+const SPLIT_PDF_CODE = `
+SPLIT PDF EXAMPLE:
+
+// Split a 10-page document into two 5-page PDFs
+
+// First half (pages 0–4)
+const instanceA = await NutrientViewer.load({
+  document: "input.pdf",
+  headless: true
+});
+
+// Second half (pages 5–9)
+const instanceB = await NutrientViewer.load({
+  document: "input.pdf",
+  headless: true
+});
+
+// Remove unwanted pages from each instance and export
+const fileA = await instanceA.exportPDFWithOperations([
+  {
+    type: "removePages",
+    pageIndexes: [5, 6, 7, 8, 9] // keep only 0–4
+  }
+]);
+
+const fileB = await instanceB.exportPDFWithOperations([
+  {
+    type: "removePages",
+    pageIndexes: [0, 1, 2, 3, 4] // keep only 5–9
+  }
+]);
+
+console.log("Split result A length:", fileA.byteLength);
+console.log("Split result B length:", fileB.byteLength);
+`.trim();
+
+/**
+ * MERGE PDFs CODE - Only when detected
+ */
+const MERGE_PDF_CODE = `
+MERGE PDFs EXAMPLE:
+
+const instance = await NutrientViewer.load({
+  container: document.getElementById("viewer"),
+  document: "first.pdf"
+});
+
+const blob = await fetch("second.pdf").then(r => r.blob());
+await instance.applyOperations([{
+  type: "importDocument",
+  document: blob,
+  beforePageIndex: 0
+}]);
+
+const buffer = await instance.exportPDF();
+console.log("Merged PDF buffer length:", buffer.byteLength);
+`.trim();
+
+/**
+ * IMAGE TO PDF CODE - Only when detected
+ */
+const IMAGE_TO_PDF_CODE = `
+IMAGE TO PDF EXAMPLES:
+
+A) Simple convert (with UI):
+
+const instance = await NutrientViewer.load({
+  container: "#viewer",
+  document: "source.png",
+  licenseKey: "YOUR_LICENSE_KEY"
+});
+
+const buffer = await instance.exportPDF();
+console.log("Exported PDF buffer length:", buffer.byteLength);
+
+B) Headless convert + download as PDF/A:
+
+const instance = await NutrientViewer.load({
+  container: "#pspdfkit",
+  document: "source.png",
+  licenseKey: "YOUR_LICENSE_KEY",
+  headless: true
+});
+
+const buffer = await instance.exportPDF({
+  outputFormat: {
+    conformance: NutrientViewer.Conformance.PDFA_4F
+  }
+});
+
+const blob = new Blob([buffer], { type: "application/pdf" });
+const objectUrl = window.URL.createObjectURL(blob);
+
+const a = document.createElement("a");
+a.href = objectUrl;
+a.style.display = "none";
+a.download = "output.pdf";
+document.body.appendChild(a);
+a.click();
+document.body.removeChild(a);
+window.URL.revokeObjectURL(objectUrl);
+`.trim();
+
+/**
+ * OFFICE TO PDF CODE - Only when detected
+ */
+const OFFICE_TO_PDF_CODE = `
+OFFICE (DOCX) TO PDF EXAMPLE:
+
+const instance = await NutrientViewer.load({
+  container: "#viewer",
+  document: "source.docx",
+  licenseKey: "YOUR_LICENSE_KEY"
+});
+
+// Simple export to PDF
+const buffer = await instance.exportPDF();
+
+// Or export as PDF/A-4f
+// const buffer = await instance.exportPDF({
+//   outputFormat: {
+//     conformance: NutrientViewer.Conformance.PDFA_4F
+//   }
+// });
+
+const blob = new Blob([buffer], { type: "application/pdf" });
+const objectUrl = window.URL.createObjectURL(blob);
+
+const a = document.createElement("a");
+a.href = objectUrl;
+a.style.display = "none";
+a.download = "output.pdf";
+document.body.appendChild(a);
+a.click();
+document.body.removeChild(a);
+window.URL.revokeObjectURL(objectUrl);
+`.trim();
+
+/**
+ * NAVBAR CODE - Only when detected
+ */
+const NAVBAR_CODE = `
+NAVBAR (ONLY IF REQUESTED):
+
+<style>
+  body { margin: 0; display: flex; flex-direction: column; height: 100vh; }
+  .navbar {
+    height: 56px;
+    background: #1a1414;
+    color: white;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    border-bottom: 1px solid #3a3434;
+  }
+  .navbar-title { font-size: 18px; font-weight: 500; }
+  #viewer { flex: 1; }
+</style>
+
+<div class="navbar">
+  <div class="navbar-title">Nutrient Viewer</div>
+</div>
+<div id="viewer"></div>
+`.trim();
+
+/**
+ * Detect keywords in user prompt
+ */
+function detectIntent(prompt: string): {
+  fillForm: boolean;
+  createForm: boolean;
+  deletePages: boolean;
+  splitPdf: boolean;
+  mergePdf: boolean;
+  imageToPdf: boolean;
+  officeToPdf: boolean;
+  navbar: boolean;
+  simple: boolean;
+} {
+  const lower = prompt.toLowerCase();
+
+  return {
+    fillForm: /fill.*form|populate.*form|prefill|set.*field|form.*data|instant.*json|fill.*field/i.test(lower),
+    createForm: /create.*field|add.*field|design.*form|form.*design|widget.*annotation/i.test(lower),
+    deletePages: /delete.*page|remove.*page|keep.*page/i.test(lower),
+    splitPdf: /split.*pdf|divide.*pdf|split.*document/i.test(lower),
+    mergePdf: /merge.*pdf|combine.*pdf|join.*pdf|import.*document/i.test(lower),
+    imageToPdf: /image.*to.*pdf|convert.*image|png.*to.*pdf|jpg.*to.*pdf|picture.*to.*pdf/i.test(lower),
+    officeToPdf: /docx.*to.*pdf|word.*to.*pdf|office.*to.*pdf|convert.*docx|convert.*word/i.test(lower),
+    navbar: /navbar|nav.*bar|header|top.*bar|navigation/i.test(lower),
+    simple: lower.length < 50 && !(/fill|create|merge|split|delete|remove|convert|navbar/i.test(lower))
+  };
 }
 
-COMPLETE FORM FILLING EXAMPLE:
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Form Filler</title>
-  <style>
-    body { margin: 0; }
-    #viewer { width: 100%; height: 100vh; }
-  </style>
-</head>
-<body>
-  <div id="viewer"></div>
-  <script src="https://cdn.cloud.pspdfkit.com/pspdfkit-web@1.10.0/nutrient-viewer.js"></script>
-  <script>
-    window.addEventListener("DOMContentLoaded", () => {
-      const container = document.getElementById("viewer");
-
-      // User data extracted from prompt
-      const formData = {
-        firstName: "John",
-        lastName: "Doe",
-        email: "john.doe@example.com",
-        phone: "+1-555-0123",
-        address: "123 Main St",
-        city: "San Francisco",
-        state: "CA",
-        zipCode: "94102",
-        dateOfBirth: "1990-05-15",
-        ssn: "XXX-XX-1234"
-      };
-
-      // Convert to Instant JSON format
-      const instantJSON = {
-        format: "https://pspdfkit.com/instant-json/v1",
-        formFieldValues: Object.keys(formData).map(fieldName => ({
-          v: 1,
-          type: "pspdfkit/form-field-value",
-          name: fieldName,
-          value: formData[fieldName]
-        }))
-      };
-
-      if (window.NutrientViewer && container) {
-        window.NutrientViewer.unload(container);
-        window.NutrientViewer.load({
-          container: container,
-          document: "https://www.nutrient.io/downloads/nutrient-web-demo.pdf",
-          instantJSON: instantJSON
-        });
-      }
-    });
-  </script>
-</body>
-</html>
-
-FORM DATA EXTRACTION PATTERNS:
-- User says: "Fill form with name John Doe, email john@example.com"
-  Extract: { name: "John Doe", email: "john@example.com" }
-
-- User says: "Name: Alice Smith, DOB: 1985-03-20, Address: 456 Oak Ave"
-  Extract: { name: "Alice Smith", dateOfBirth: "1985-03-20", address: "456 Oak Ave" }
-
-- User provides JSON: { "firstName": "Bob", "lastName": "Johnson" }
-  Use as-is: { firstName: "Bob", lastName: "Johnson" }
-
-FIELD NAME MAPPING (if user doesn't specify exact field names):
-- Name/Full Name → firstName, lastName, or fullName
-- Email/E-mail → email
-- Phone/Telephone → phone or phoneNumber
-- Date of Birth/DOB/Birthday → dateOfBirth or dob
-- Address/Street → address or streetAddress
-- City → city
-- State/Province → state
-- ZIP/Postal Code → zipCode or postalCode
-- Social Security Number/SSN → ssn
-
-IMPORTANT NOTES:
-- If user provides a PDF URL, use it in the document parameter
-- If no PDF URL provided, use demo PDF: https://www.nutrient.io/downloads/nutrient-web-demo.pdf
-- Always wrap field values as strings in Instant JSON
-- Date format: Use ISO format (YYYY-MM-DD) when possible
-- Checkbox fields: Use boolean values (true/false)
-- If user asks to "extract and fill", explain that extraction requires backend processing
-  and show how to fill with provided data instead
-`.trim();
-
 /**
- * Helper: builds the enhanced prompt
+ * Build smart dynamic prompt
  */
-function buildEnhancedPrompt(userPrompt: string): string {
+function buildEnhancedPrompt(userPrompt: string, pdfUrl?: string): string {
+  const intent = detectIntent(userPrompt);
   const parts: string[] = [];
 
-  parts.push(CODE_ONLY_RULES);
+  // ALWAYS: Core rules
+  parts.push(CORE_RULES);
   parts.push("");
-  parts.push(DOMAIN_LOCK);
+
+  // ALWAYS: Base viewer
+  parts.push(BASE_VIEWER);
   parts.push("");
-  parts.push(VIEWER_CONTRACT);
+
+  // CONDITIONAL: Only add relevant code samples based on detected keywords
+  if (intent.fillForm) {
+    parts.push("FORM FILLING:");
+    parts.push(FORM_FILLING_CODE);
+    parts.push("");
+  }
+
+  if (intent.createForm) {
+    parts.push("CREATE FORM FIELDS:");
+    parts.push(CREATE_FORM_CODE);
+    parts.push("");
+  }
+
+  if (intent.deletePages) {
+    parts.push("DELETE PAGES:");
+    parts.push(DELETE_PAGES_CODE);
+    parts.push("");
+  }
+
+  if (intent.splitPdf) {
+    parts.push("SPLIT PDF:");
+    parts.push(SPLIT_PDF_CODE);
+    parts.push("");
+  }
+
+  if (intent.mergePdf) {
+    parts.push("MERGE PDFs:");
+    parts.push(MERGE_PDF_CODE);
+    parts.push("");
+  }
+
+  if (intent.imageToPdf) {
+    parts.push("IMAGE TO PDF:");
+    parts.push(IMAGE_TO_PDF_CODE);
+    parts.push("");
+  }
+
+  if (intent.officeToPdf) {
+    parts.push("OFFICE TO PDF:");
+    parts.push(OFFICE_TO_PDF_CODE);
+    parts.push("");
+  }
+
+  if (intent.navbar) {
+    parts.push("NAVBAR (ONLY IF REQUESTED):");
+    parts.push(NAVBAR_CODE);
+    parts.push("");
+  }
+
+  // CRITICAL: PDF URL injection
+  if (pdfUrl) {
+    parts.push("UPLOADED PDF:");
+    parts.push(`USER UPLOADED: ${pdfUrl}`);
+    parts.push(`YOU MUST USE: document: "${pdfUrl}"`);
+    parts.push("");
+  }
+
+  // PRINCIPLE CHECK
+  parts.push("PRINCIPLE:");
+  parts.push("- If request is BEYOND Nutrient Web SDK, output HTML comment: <!-- OUT_OF_SCOPE: reason -->");
+  parts.push("- If request is SIMPLE/NO DETAIL, just open viewer with uploaded PDF");
+  parts.push("- DEFAULT: Viewer with uploaded PDF, NO navbar unless requested");
   parts.push("");
-  parts.push(REFERENCE_GUIDE);
-  parts.push("");
-  parts.push(TOOLBAR_RULES);
-  parts.push("");
-  parts.push(FORM_FILLING_GUIDE);
-  parts.push("");
-  parts.push(VIEWER_FALLBACK_CONTRACT);
-  parts.push("");
-  parts.push(OPTIONAL_UI);
-  parts.push("");
-  parts.push("========================================================");
-  parts.push("USER REQUEST");
-  parts.push("========================================================");
-  parts.push(userPrompt.trim());
-  parts.push("");
-  parts.push("========================================================");
-  parts.push("FINAL REMINDER: OUTPUT CODE ONLY");
-  parts.push("========================================================");
-  parts.push("Remember:");
-  parts.push("- NO markdown, NO prose, NO explanations");
-  parts.push("- Start with <!DOCTYPE html> for HTML widgets");
-  parts.push("- Use // FILE: comments for multi-file Next.js output");
-  parts.push("- Output ONLY executable code or comment block for out-of-scope");
-  parts.push("- For form filling: extract data from user prompt and use instantJSON");
-  parts.push("");
-  parts.push("Generate the code now:");
+
+  // User request
+  parts.push("USER REQUEST:");
+  parts.push(userPrompt);
 
   return parts.join("\n");
 }
@@ -500,8 +497,8 @@ function buildEnhancedPrompt(userPrompt: string): string {
  * Public API
  */
 export function prompt_manager(input: PromptManagerInput): PromptManagerOutput {
-  const user_prompt = input.user_prompt ?? "";
-  const enhanced_prompt = buildEnhancedPrompt(user_prompt);
+  const { user_prompt, pdf_url } = input;
+  const enhanced_prompt = buildEnhancedPrompt(user_prompt, pdf_url);
 
   return {
     user_prompt,

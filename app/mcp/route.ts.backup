@@ -194,644 +194,509 @@ const handler = createMcpHandler(async (server: any) => {
     invoking: "Ready to upload PDF...",
     invoked: "Result ready",
     html: `
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Nutrient Viewer - Global Tool</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=block">
-    <style>
-      html { visibility: hidden; }
-      html.fonts-ready { visibility: visible; }
-      :root, html, body, button, input, select, textarea, label, div, span, p, a, li, td, th {
-        font-family: "DM Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji" !important;
-      }
-
-      * { margin: 0; padding: 0; box-sizing: border-box; }
-      body {
-        background: #1a1414;
-        color: #fff;
-        height: 100vh;
-        overflow: hidden;
-        position: relative;
-        padding-top: 22px;
-      }
-
-      /* Brand Header */
-      .brand-header {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 22px;
-        background-color: #1a1414;
-        z-index: 10000;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0 12px;
-        border-bottom: 1px solid #3a3434;
-        gap: 8px;
-      }
-      .brand-header img {
-        height: 13px;
-        width: auto;
-      }
-      .brand-header span {
-        font-family: 'DM Sans', sans-serif;
-        font-size: 10px;
-        font-weight: 300;
-        color: rgba(255, 255, 255, 0.9);
-        letter-spacing: 0.02em;
-      }
-
-      /* Upload Screen (STAGE 1) */
-      .upload-screen {
-        position: absolute;
-        top: 22px;
-        left: 0;
-        width: 100%;
-        height: calc(100% - 22px);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #1a1414;
-      }
-      .upload-screen.hidden {
-        display: none;
-      }
-      .upload-container {
-        text-align: center;
-        max-width: 400px;
-        padding: 24px;
-      }
-      .upload-title {
-        font-size: 18px;
-        font-weight: 500;
-        margin-bottom: 12px;
-        color: #fff;
-      }
-      .upload-subtitle {
-        font-size: 14px;
-        color: #888;
-        margin-bottom: 32px;
-      }
-      .upload-button {
-        background: #3b82f6;
-        color: #fff;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 24px;
-        font-size: 14px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s;
-        font-family: 'DM Sans', sans-serif;
-      }
-      .upload-button:hover {
-        background: #2563eb;
-        transform: translateY(-1px);
-      }
-      .upload-button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-      input[type="file"] {
-        display: none;
-      }
-      .upload-status {
-        margin-top: 16px;
-        font-size: 13px;
-        color: #10b981;
-        min-height: 20px;
-      }
-      .upload-error {
-        color: #ef4444;
-      }
-
-      /* Processing Screen (STAGE 2) */
-      .processing-screen {
-        position: absolute;
-        top: 22px;
-        left: 0;
-        width: 100%;
-        height: calc(100% - 22px);
-        display: none;
-      }
-      .processing-screen.active {
-        display: block;
-      }
-
-      /* Viewer Panel */
-      .viewer-panel {
-        width: 100%;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-      }
-      .viewer-container {
-        flex: 1;
-        position: relative;
-        background: #fff;
-      }
-      #viewer-iframe {
-        width: 100%;
-        height: 100%;
-        border: none;
-        background: #fff;
-      }
-      .viewer-empty {
-        padding: 24px;
-        text-align: center;
-        color: #888;
-        background: #1a1414;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-      }
-
-      /* Loading Overlay */
-      .loading-overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(26, 20, 20, 0.97);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
-        transition: opacity 0.3s ease;
-      }
-      .loading-overlay.hidden {
-        opacity: 0;
-        pointer-events: none;
-      }
-      .loading-content {
-        text-align: center;
-        max-width: 320px;
-      }
-
-      /* Spinner */
-      .spinner {
-        width: 40px;
-        height: 40px;
-        margin: 0 auto 24px;
-        border: 3px solid rgba(59, 130, 246, 0.2);
-        border-top-color: #3b82f6;
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-      }
-      @keyframes spin {
-        to { transform: rotate(360deg); }
-      }
-
-      /* Status Text */
-      .status-text {
-        text-align: center;
-        font-size: 14px;
-        color: #ccc;
-        transition: opacity 0.3s ease;
-        min-height: 20px;
-      }
-
-      /* Details Button */
-      .details-button {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: rgba(42, 36, 36, 0.95);
-        border: 1px solid #3a3434;
-        border-radius: 8px;
-        padding: 10px 18px;
-        color: #fff;
-        font-size: 13px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        z-index: 900;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-      }
-      .details-button:hover {
-        background: rgba(58, 52, 52, 0.95);
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-      }
-      .details-button.hidden {
-        display: none;
-      }
-
-      /* Details Drawer */
-      .details-drawer {
-        position: fixed;
-        top: 22px;
-        right: 0;
-        width: 420px;
-        max-width: 90vw;
-        height: calc(100vh - 22px);
-        background: #2a2424;
-        border-left: 1px solid #3a3434;
-        transform: translateX(100%);
-        transition: transform 0.3s ease;
-        z-index: 950;
-        overflow-y: auto;
-        box-shadow: -4px 0 16px rgba(0, 0, 0, 0.5);
-      }
-      .details-drawer.open {
-        transform: translateX(0);
-      }
-
-      /* Drawer Header */
-      .drawer-header {
-        position: sticky;
-        top: 0;
-        background: #1a1414;
-        padding: 16px 20px;
-        border-bottom: 1px solid #3a3434;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        z-index: 10;
-      }
-      .drawer-title {
-        font-size: 15px;
-        font-weight: 600;
-        color: #ffffff;
-      }
-      .drawer-close {
-        background: transparent;
-        border: none;
-        color: #888;
-        font-size: 20px;
-        cursor: pointer;
-        padding: 4px 8px;
-        line-height: 1;
-        transition: color 0.2s ease;
-      }
-      .drawer-close:hover {
-        color: #fff;
-      }
-
-      /* Drawer Section */
-      .drawer-section {
-        border-bottom: 1px solid #3a3434;
-      }
-      .drawer-section-header {
-        padding: 14px 20px;
-        background: #252020;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        transition: background 0.2s;
-      }
-      .drawer-section-header:hover {
-        background: #2d2727;
-      }
-      .drawer-section-title {
-        font-size: 13px;
-        font-weight: 600;
-        color: #ccc;
-      }
-      .drawer-section-toggle {
-        font-size: 11px;
-        color: #666;
-      }
-      .drawer-section-content {
-        padding: 14px 20px;
-        font-size: 12px;
-        line-height: 1.6;
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        color: #999;
-        max-height: 200px;
-        overflow-y: auto;
-        display: none;
-        background: #1a1414;
-      }
-      .drawer-section-content.expanded {
-        display: block;
-      }
-
-      /* Error/Warning Displays */
-      .error-display {
-        padding: 12px 20px;
-        background: #7f1d1d;
-        color: #fca5a5;
-        font-size: 12px;
-        border-bottom: 1px solid #991b1b;
-      }
-      .warning-display {
-        padding: 12px 20px;
-        background: #78350f;
-        color: #fcd34d;
-        font-size: 12px;
-        border-bottom: 1px solid #92400e;
-      }
-
-      /* Custom Scrollbar */
-      .drawer-section-content::-webkit-scrollbar,
-      .details-drawer::-webkit-scrollbar {
-        width: 6px;
-      }
-      .drawer-section-content::-webkit-scrollbar-track,
-      .details-drawer::-webkit-scrollbar-track {
-        background: #1a1414;
-      }
-      .drawer-section-content::-webkit-scrollbar-thumb,
-      .details-drawer::-webkit-scrollbar-thumb {
-        background: #3a3434;
-        border-radius: 3px;
-      }
-    </style>
-    <script>
-      (function () {
-        var done = false;
-        function show(){ if (done) return; done = true; document.documentElement.classList.add('fonts-ready'); }
-        var t = setTimeout(show, 900);
-        try {
-          if (document.fonts && document.fonts.load) {
-            Promise.all([
-              document.fonts.load('300 12px "DM Sans"'),
-              document.fonts.load('400 14px "DM Sans"'),
-              document.fonts.load('500 14px "DM Sans"')
-            ]).then(function(){ clearTimeout(t); show(); }).catch(function(){ clearTimeout(t); show(); });
-          } else {
-            clearTimeout(t); show();
-          }
-        } catch(e) {
-          clearTimeout(t); show();
-        }
-      })();
-    </script>
-  </head>
-  <body>
-    <!-- Brand Header -->
-    <header class="brand-header">
-      <img src="${baseURL}/logo.png" alt="Nutrient" onload="this.style.opacity=1" onerror="this.onerror=null; this.src='https://www.nutrient.io/favicon.ico'; this.style.opacity=1" style="opacity:0;transition:opacity 0.2s" />
-      <span>Nutrient</span>
-    </header>
-
-    <!-- STAGE 1: Upload Screen -->
-    <div class="upload-screen" id="upload-screen">
-      <div class="upload-container">
-        <div class="upload-title">Upload Your PDF</div>
-        <div class="upload-subtitle">Upload a PDF to get started with the Nutrient Viewer</div>
-
-        <input type="file" id="file-input" accept=".pdf,application/pdf" />
-        <button class="upload-button" id="upload-button">Choose PDF File</button>
-
-        <div class="upload-status" id="upload-status"></div>
-      </div>
-    </div>
-
-    <!-- STAGE 2: Processing Screen -->
-    <div class="processing-screen" id="processing-screen">
-      <div class="viewer-panel">
-        <div class="viewer-container" id="viewer-container">
-          <div class="viewer-empty">Initializing viewer...</div>
-        </div>
-      </div>
-
-      <!-- Loading Overlay -->
-      <div class="loading-overlay" id="loading-overlay">
-        <div class="loading-content">
-          <div class="spinner"></div>
-          <div class="status-text" id="status-text">Processing...</div>
-        </div>
-      </div>
-
-      <!-- Details Button -->
-      <button class="details-button hidden" id="details-button">Details</button>
-    </div>
-
-    <!-- Details Drawer -->
-    <div class="details-drawer" id="details-drawer">
-      <div class="drawer-header">
-        <span class="drawer-title">Debug Details</span>
-        <button class="drawer-close" id="drawer-close">×</button>
-      </div>
-
-      <div id="error-container"></div>
-      <div id="warning-container"></div>
-
-      <div class="drawer-section">
-        <div class="drawer-section-header" onclick="toggleDrawerSection('user')">
-          <span class="drawer-section-title">User Prompt</span>
-          <span class="drawer-section-toggle" id="toggle-user">▶</span>
-        </div>
-        <div class="drawer-section-content" id="content-user">Loading...</div>
-      </div>
-
-      <div class="drawer-section">
-        <div class="drawer-section-header" onclick="toggleDrawerSection('enhanced')">
-          <span class="drawer-section-title">Enhanced Prompt</span>
-          <span class="drawer-section-toggle" id="toggle-enhanced">▶</span>
-        </div>
-        <div class="drawer-section-content" id="content-enhanced">Loading...</div>
-      </div>
-
-      <div class="drawer-section">
-        <div class="drawer-section-header" onclick="toggleDrawerSection('response')">
-          <span class="drawer-section-title">LLM Response</span>
-          <span class="drawer-section-toggle" id="toggle-response">▶</span>
-        </div>
-        <div class="drawer-section-content" id="content-response">Loading...</div>
-      </div>
-
-      <div class="drawer-section">
-        <div class="drawer-section-header" onclick="toggleDrawerSection('meta')">
-          <span class="drawer-section-title">Metadata</span>
-          <span class="drawer-section-toggle" id="toggle-meta">▶</span>
-        </div>
-        <div class="drawer-section-content" id="content-meta">Loading...</div>
-      </div>
-    </div>
-
-    <script>
-      // Global function for drawer section toggling
-      function toggleDrawerSection(name) {
-        const content = document.getElementById('content-' + name);
-        const toggle = document.getElementById('toggle-' + name);
-
-        if (content.classList.contains('expanded')) {
-          content.classList.remove('expanded');
-          toggle.textContent = '▶';
-        } else {
-          content.classList.add('expanded');
-          toggle.textContent = '▼';
-        }
-      }
-
-      (function() {
-        // Element references
-        const uploadScreen = document.getElementById('upload-screen');
-        const processingScreen = document.getElementById('processing-screen');
-        const fileInput = document.getElementById('file-input');
-        const uploadButton = document.getElementById('upload-button');
-        const uploadStatus = document.getElementById('upload-status');
-        const viewerContainer = document.getElementById('viewer-container');
-        const loadingOverlay = document.getElementById('loading-overlay');
-        const detailsButton = document.getElementById('details-button');
-        const statusText = document.getElementById('status-text');
-        const detailsDrawer = document.getElementById('details-drawer');
-        const drawerClose = document.getElementById('drawer-close');
-        const userContent = document.getElementById('content-user');
-        const enhancedContent = document.getElementById('content-enhanced');
-        const responseContent = document.getElementById('content-response');
-        const metaContent = document.getElementById('content-meta');
-        const errorContainer = document.getElementById('error-container');
-        const warningContainer = document.getElementById('warning-container');
-
-        let lastOutput = null;
-        let viewerInitialized = false;
-        let pdfUploaded = false;
-        let processingResult = null; // Store processing result for drawer
-
-        // Base URL for API calls
-        const baseURL = '${baseURL}';
-
-        // Details drawer toggle
-        detailsButton.addEventListener('click', function() {
-          detailsDrawer.classList.add('open');
-        });
-
-        drawerClose.addEventListener('click', function() {
-          detailsDrawer.classList.remove('open');
-        });
-
-        // Upload button click handler
-        uploadButton.addEventListener('click', function() {
-          fileInput.click();
-        });
-
-        // File input change handler
-        fileInput.addEventListener('change', async function(e) {
-          const file = e.target.files[0];
-          if (!file) return;
-
-          // Validate file type
-          if (file.type !== 'application/pdf') {
-            uploadStatus.textContent = 'Please select a PDF file';
-            uploadStatus.className = 'upload-status upload-error';
-            return;
-          }
-
-          // Show uploading status
-          uploadStatus.textContent = 'Uploading...';
-          uploadStatus.className = 'upload-status';
-          uploadButton.disabled = true;
-
-          try {
-            // Upload file
-            const formData = new FormData();
-            formData.append('file', file);
-
-            const response = await fetch(\`${baseURL}/api/upload-pdf\`, {
-              method: 'POST',
-              body: formData
-            });
-
-            console.log('Upload response status:', response.status);
-
-            const result = await response.json();
-            console.log('Upload result:', result);
-
-            if (!response.ok || result.error) {
-              throw new Error(result.error || 'Upload failed');
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Nutrient Viewer - Global Tool</title>
+          ${DMSANS_HEAD}
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+              background: #1a1414;
+              color: #fff;
+              height: 100vh;
+              overflow: hidden;
+              position: relative;
+              padding-top: 22px;
             }
 
-            if (result.success && result.url) {
-              pdfUploaded = true;
-              const pdfUrl = result.url;
+            /* ========== EDITABLE: THIN BRAND HEADER (GLOBAL_TOOL WIDGET) ========== */
+            /* Location: Line 213-239 in app/mcp/route.ts */
+            /* This is the permanent thin branding bar at the top of global_tool widget */
+            .brand-header {
+              position: fixed;
+              top: 0;
+              left: 0;
+              right: 0;
+              height: 22px;
+              background-color: #1a1414;
+              z-index: 10000;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 0 12px;
+              border-bottom: 1px solid #3a3434;
+              gap: 8px;
+            }
+            .brand-header img {
+              height: 13px;
+              width: auto;
+            }
+            .brand-header span {
+              font-family: 'DM Sans', sans-serif;
+              font-size: 10px;
+              font-weight: 300;
+              color: rgba(255, 255, 255, 0.9);
+              letter-spacing: 0.02em;
+            }
+            /* ========== END EDITABLE SECTION ========== */
 
-              console.log('PDF uploaded successfully:', pdfUrl);
+            /* Viewer Panel - Adjusted for header */
+            .viewer-panel {
+              position: absolute;
+              top: 22px;
+              left: 0;
+              width: 100%;
+              height: calc(100% - 22px);
+              display: flex;
+              flex-direction: column;
+            }
+            .viewer-container {
+              flex: 1;
+              position: relative;
+              background: #fff;
+            }
+            #viewer-iframe {
+              width: 100%;
+              height: 100%;
+              border: none;
+              background: #fff;
+            }
+            .viewer-empty {
+              padding: 24px;
+              text-align: center;
+              color: #888;
+              background: #1a1414;
+              height: 100%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 14px;
+            }
 
-              // Show brief success message
-              uploadStatus.textContent = '✓ PDF uploaded! Processing...';
-              uploadStatus.className = 'upload-status';
+            /* Loading Overlay */
+            .loading-overlay {
+              position: absolute;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              background: rgba(26, 20, 20, 0.97);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              z-index: 1000;
+              transition: opacity 0.3s ease;
+            }
+            .loading-overlay.hidden {
+              opacity: 0;
+              pointer-events: none;
+            }
+            .loading-content {
+              text-align: center;
+              max-width: 320px;
+            }
 
-              // AUTOMATICALLY start processing after 500ms
-              setTimeout(async function() {
-                try {
-                  // Switch to processing screen with spinner
-                  uploadScreen.classList.add('hidden');
-                  processingScreen.classList.add('active');
-                  statusText.textContent = 'Enhancing prompt...';
+            /* Spinner */
+            .spinner {
+              width: 40px;
+              height: 40px;
+              margin: 0 auto 24px;
+              border: 3px solid rgba(59, 130, 246, 0.2);
+              border-top-color: #3b82f6;
+              border-radius: 50%;
+              animation: spin 0.8s linear infinite;
+            }
+            @keyframes spin {
+              to { transform: rotate(360deg); }
+            }
 
-                  // DEBUG: Check what's in toolOutput
-                  console.log('=== DEBUG TOOL OUTPUT ===');
-                  console.log('window.openai:', window.openai);
-                  console.log('window.openai.toolOutput:', window.openai?.toolOutput);
-                  console.log('window.openai.toolOutput.global_tool:', window.openai?.toolOutput?.global_tool);
+            /* Status Text */
+            .status-text {
+              text-align: center;
+              font-size: 14px;
+              color: #ccc;
+              transition: opacity 0.3s ease;
+              min-height: 20px;
+            }
 
-                  // Get the EXACT user prompt from ChatGPT (read DIRECTLY from toolOutput)
-                  const toolOutput = window.openai?.toolOutput?.global_tool;
-                  const userPromptFromChatGPT = toolOutput?.user_prompt;
+            /* Details Button */
+            .details-button {
+              position: fixed;
+              bottom: 20px;
+              right: 20px;
+              background: rgba(42, 36, 36, 0.95);
+              border: 1px solid #3a3434;
+              border-radius: 8px;
+              padding: 10px 18px;
+              color: #fff;
+              font-size: 13px;
+              font-weight: 500;
+              cursor: pointer;
+              transition: all 0.2s ease;
+              z-index: 900;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            }
+            .details-button:hover {
+              background: rgba(58, 52, 52, 0.95);
+              transform: translateY(-1px);
+              box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            }
+            .details-button.hidden {
+              display: none;
+            }
 
-                  console.log('Starting automatic processing with PDF:', pdfUrl);
-                  console.log('User prompt captured:', userPromptFromChatGPT);
-                  console.log('User prompt type:', typeof userPromptFromChatGPT);
-                  console.log('User prompt is empty?', !userPromptFromChatGPT);
+            /* Details Drawer */
+            .details-drawer {
+              position: fixed;
+              top: var(--brand-header-height, 0px);
+              right: 0;
+              width: 420px;
+              max-width: 90vw;
+              height: calc(100vh - var(--brand-header-height, 0px));
+              background: #2a2424;
+              border-left: 1px solid #3a3434;
+              transform: translateX(100%);
+              transition: transform 0.3s ease;
+              z-index: 950;
+              overflow-y: auto;
+              box-shadow: -4px 0 16px rgba(0, 0, 0, 0.5);
+            }
+            .details-drawer.open {
+              transform: translateX(0);
+            }
 
-                  if (!userPromptFromChatGPT) {
-                    console.error('ERROR: User prompt not found in toolOutput! Using fallback.');
+            /* Drawer Header */
+            .drawer-header {
+              position: sticky;
+              top: 0;
+              background: #1a1414;
+              padding: 16px 20px;
+              border-bottom: 1px solid #3a3434;
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              z-index: 10;
+            }
+            .drawer-title {
+              font-size: 15px;
+              font-weight: 600;
+              color: #ffffff;
+            }
+            .drawer-close {
+              background: transparent;
+              border: none;
+              color: #888;
+              font-size: 20px;
+              cursor: pointer;
+              padding: 4px 8px;
+              line-height: 1;
+              transition: color 0.2s ease;
+            }
+            .drawer-close:hover {
+              color: #fff;
+            }
+
+            /* Drawer Section */
+            .drawer-section {
+              border-bottom: 1px solid #3a3434;
+            }
+            .drawer-section-header {
+              padding: 14px 20px;
+              background: #252020;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              transition: background 0.2s;
+            }
+            .drawer-section-header:hover {
+              background: #2d2727;
+            }
+            .drawer-section-title {
+              font-size: 13px;
+              font-weight: 600;
+              color: #ccc;
+            }
+            .drawer-section-toggle {
+              font-size: 11px;
+              color: #666;
+            }
+            .drawer-section-content {
+              padding: 14px 20px;
+              font-size: 12px;
+              line-height: 1.6;
+              white-space: pre-wrap;
+              word-wrap: break-word;
+              color: #999;
+              max-height: 200px;
+              overflow-y: auto;
+              display: none;
+              background: #1a1414;
+            }
+            .drawer-section-content.expanded {
+              display: block;
+            }
+
+            /* Error/Warning Displays */
+            .error-display {
+              padding: 12px 20px;
+              background: #7f1d1d;
+              color: #fca5a5;
+              font-size: 12px;
+              border-bottom: 1px solid #991b1b;
+            }
+            .warning-display {
+              padding: 12px 20px;
+              background: #78350f;
+              color: #fcd34d;
+              font-size: 12px;
+              border-bottom: 1px solid #92400e;
+            }
+
+            /* Custom Scrollbar */
+            .drawer-section-content::-webkit-scrollbar,
+            .details-drawer::-webkit-scrollbar {
+              width: 6px;
+            }
+            .drawer-section-content::-webkit-scrollbar-track,
+            .details-drawer::-webkit-scrollbar-track {
+              background: #1a1414;
+            }
+            .drawer-section-content::-webkit-scrollbar-thumb,
+            .details-drawer::-webkit-scrollbar-thumb {
+              background: #3a3434;
+              border-radius: 3px;
+            }
+          </style>
+        </head>
+        <body>
+          <!-- Thin Brand Header - Always visible -->
+          <header class="brand-header">
+            <img src="${baseURL}/logo.png" alt="Nutrient" onload="this.style.opacity=1" onerror="this.onerror=null; this.src=\'https://www.nutrient.io/favicon.ico\'; this.style.opacity=1" style="opacity:0;transition:opacity 0.2s" />
+            <span>Nutrient</span>
+          </header>
+
+          <!-- Viewer Panel (Full Screen) -->
+          <div class="viewer-panel">
+            <div class="viewer-container" id="viewer-container">
+              <div class="viewer-empty">Initializing viewer...</div>
+            </div>
+          </div>
+
+          <!-- Loading Overlay -->
+          <div class="loading-overlay" id="loading-overlay">
+            <div class="loading-content">
+              <div class="spinner"></div>
+              <div class="status-text" id="status-text">Initializing...</div>
+            </div>
+          </div>
+
+          <!-- Details Button -->
+          <button class="details-button hidden" id="details-button">
+            Details
+          </button>
+
+          <!-- Details Drawer -->
+          <div class="details-drawer" id="details-drawer">
+            <div class="drawer-header">
+              <span class="drawer-title">Debug Details</span>
+              <button class="drawer-close" id="drawer-close">×</button>
+            </div>
+
+            <div id="error-container"></div>
+            <div id="warning-container"></div>
+
+            <div class="drawer-section">
+              <div class="drawer-section-header" onclick="toggleDrawerSection('user')">
+                <span class="drawer-section-title">User Prompt</span>
+                <span class="drawer-section-toggle" id="toggle-user">▶</span>
+              </div>
+              <div class="drawer-section-content" id="content-user">Loading...</div>
+            </div>
+
+            <div class="drawer-section">
+              <div class="drawer-section-header" onclick="toggleDrawerSection('enhanced')">
+                <span class="drawer-section-title">Enhanced Prompt</span>
+                <span class="drawer-section-toggle" id="toggle-enhanced">▶</span>
+              </div>
+              <div class="drawer-section-content" id="content-enhanced">Loading...</div>
+            </div>
+
+            <div class="drawer-section">
+              <div class="drawer-section-header" onclick="toggleDrawerSection('response')">
+                <span class="drawer-section-title">LLM Response</span>
+                <span class="drawer-section-toggle" id="toggle-response">▶</span>
+              </div>
+              <div class="drawer-section-content" id="content-response">Loading...</div>
+            </div>
+
+            <div class="drawer-section">
+              <div class="drawer-section-header" onclick="toggleDrawerSection('meta')">
+                <span class="drawer-section-title">Metadata</span>
+                <span class="drawer-section-toggle" id="toggle-meta">▶</span>
+              </div>
+              <div class="drawer-section-content" id="content-meta">Loading...</div>
+            </div>
+          </div>
+
+          <script>
+            // Toggle drawer section expansion
+            function toggleDrawerSection(name) {
+              const content = document.getElementById('content-' + name);
+              const toggle = document.getElementById('toggle-' + name);
+
+              if (content.classList.contains('expanded')) {
+                content.classList.remove('expanded');
+                toggle.textContent = '▶';
+              } else {
+                content.classList.add('expanded');
+                toggle.textContent = '▼';
+              }
+            }
+
+            (function() {
+              // Dynamic brand header height measurement
+              function updateBrandHeaderHeight() {
+                const brandHeader = document.querySelector('.brand-header');
+                if (brandHeader) {
+                  const height = brandHeader.offsetHeight;
+                  document.documentElement.style.setProperty('--brand-header-height', height + 'px');
+                } else {
+                  document.documentElement.style.setProperty('--brand-header-height', '0px');
+                }
+              }
+
+              // Update on load and resize
+              updateBrandHeaderHeight();
+              window.addEventListener('resize', updateBrandHeaderHeight);
+              window.addEventListener('load', updateBrandHeaderHeight);
+
+              // Element references
+              const userContent = document.getElementById('content-user');
+              const enhancedContent = document.getElementById('content-enhanced');
+              const responseContent = document.getElementById('content-response');
+              const metaContent = document.getElementById('content-meta');
+              const viewerContainer = document.getElementById('viewer-container');
+              const errorContainer = document.getElementById('error-container');
+              const warningContainer = document.getElementById('warning-container');
+              const loadingOverlay = document.getElementById('loading-overlay');
+              const detailsButton = document.getElementById('details-button');
+              const detailsDrawer = document.getElementById('details-drawer');
+              const drawerClose = document.getElementById('drawer-close');
+              const statusText = document.getElementById('status-text');
+
+              // Status tracking
+              let lastOutput = null;
+              let viewerInitialized = false;
+              let currentStatusText = '';
+              let statusCycleIndex = 0;
+              let statusCycleInterval = null;
+              let statusSteps = {
+                captured: false,
+                enhanced: false,
+                calling: false,
+                preparing: false,
+                rendering: false,
+                ready: false
+              };
+
+              // Loading messages to cycle through
+              const loadingMessages = [
+                'Initializing...',
+                'Enhancing prompt...',
+                'Waiting for LLM response...',
+                'Processing...'
+              ];
+
+              // Details drawer toggle
+              detailsButton.addEventListener('click', function() {
+                detailsDrawer.classList.add('open');
+              });
+
+              drawerClose.addEventListener('click', function() {
+                detailsDrawer.classList.remove('open');
+              });
+
+              // Update status text with fade effect
+              function updateStatusText(newText) {
+                if (currentStatusText === newText) return;
+
+                currentStatusText = newText;
+                statusText.style.opacity = '0';
+
+                setTimeout(function() {
+                  statusText.textContent = newText;
+                  statusText.style.opacity = '1';
+                }, 150);
+              }
+
+              // Cycle through loading messages
+              function cycleStatusMessages() {
+                updateStatusText(loadingMessages[statusCycleIndex]);
+                statusCycleIndex = (statusCycleIndex + 1) % loadingMessages.length;
+              }
+
+              // Start status cycling (every 2 seconds)
+              statusCycleInterval = setInterval(cycleStatusMessages, 2000);
+              cycleStatusMessages(); // Show first message immediately
+
+              // Update status steps
+              function updateStatusSteps(toolOutput) {
+                // Check if viewer is ready
+                if (viewerInitialized && !statusSteps.ready) {
+                  statusSteps.ready = true;
+
+                  // Stop cycling messages
+                  if (statusCycleInterval) {
+                    clearInterval(statusCycleInterval);
+                    statusCycleInterval = null;
                   }
 
-                  // CRITICAL: Must have user prompt
-                  if (!userPromptFromChatGPT || userPromptFromChatGPT.trim() === '') {
-                    throw new Error('CRITICAL ERROR: No user prompt captured from ChatGPT. Please tell ChatGPT what you want to do with the PDF.');
-                  }
+                  // Show final message
+                  updateStatusText('Ready');
 
-                  console.log('Sending to API with user_prompt:', userPromptFromChatGPT);
+                  // Hide loading overlay
+                  setTimeout(function() {
+                    loadingOverlay.classList.add('hidden');
+                    detailsButton.classList.remove('hidden');
+                  }, 600);
+                }
+              }
 
-                  // Call processing API with the uploaded PDF URL and EXACT USER PROMPT
-                  const processResponse = await fetch(\`${baseURL}/api/process-pdf\`, {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                      pdf_url: pdfUrl,
-                      user_prompt: userPromptFromChatGPT
-                    })
-                  });
+              // Poll for tool output
+              function updateDisplay() {
+                const toolOutput = window.openai?.toolOutput?.global_tool;
+                const outputKey = JSON.stringify(toolOutput ?? null);
 
-                  if (!processResponse.ok) {
-                    throw new Error('Processing failed');
-                  }
+                if (outputKey !== lastOutput) {
+                  lastOutput = outputKey;
 
-                  const processResult = await processResponse.json();
-
-                  console.log('Processing complete!');
-
-                  if (processResult.success && processResult.result.response_html) {
-                    // Store processing result for drawer
-                    processingResult = processResult.result;
-
-                    // Populate drawer with debug info
-                    userContent.textContent = processingResult.user_prompt || 'N/A';
-                    enhancedContent.textContent = processingResult.enhanced_prompt || 'N/A';
-                    responseContent.textContent = processingResult.response_text || 'N/A';
+                  if (toolOutput) {
+                    // Update info panels
+                    userContent.textContent = toolOutput.user_prompt || 'N/A';
+                    enhancedContent.textContent = toolOutput.enhanced_prompt || 'N/A';
+                    responseContent.textContent = toolOutput.response_text || 'N/A';
 
                     // Update metadata
-                    const provider = processingResult.provider || 'unknown';
-                    const modelRequested = processingResult.model_requested || 'N/A';
-                    const modelUsed = processingResult.model_used || 'N/A';
-                    const errors = processingResult.errors || [];
-                    const warnings = processingResult.warnings || [];
+                    const provider = toolOutput.provider || 'unknown';
+                    const modelRequested = toolOutput.model_requested || 'N/A';
+                    const modelUsed = toolOutput.model_used || 'N/A';
+                    const errors = toolOutput.errors || [];
+                    const warnings = toolOutput.warnings || [];
+                    const availableModels = toolOutput.available_models || [];
 
                     let metaText = 'Provider: ' + provider + '\\n' +
                                    'Model Requested: ' + modelRequested + '\\n' +
                                    'Model Used: ' + modelUsed + '\\n' +
                                    'Errors: ' + (errors.length > 0 ? errors.join(', ') : 'none') + '\\n' +
                                    'Warnings: ' + (warnings.length > 0 ? warnings.join(', ') : 'none');
+
+                    if (availableModels.length > 0) {
+                      metaText += '\\n\\nAvailable Models:\\n' + availableModels.join('\\n');
+                    }
 
                     metaContent.textContent = metaText;
 
@@ -849,103 +714,62 @@ const handler = createMcpHandler(async (server: any) => {
                       warningContainer.innerHTML = '';
                     }
 
-                    // Initialize viewer with the generated HTML
-                    initializeViewer(processingResult.response_html);
-                    viewerInitialized = true;
-
-                    // Hide loading overlay
-                    setTimeout(function() {
-                      loadingOverlay.classList.add('hidden');
-                      detailsButton.classList.remove('hidden');
-                    }, 1000);
-                  } else {
-                    throw new Error('No viewer HTML generated');
+                    // Initialize viewer with response_html
+                    if (!viewerInitialized && toolOutput.response_html) {
+                      initializeViewer(toolOutput.response_html);
+                      viewerInitialized = true;
+                    }
                   }
-                } catch (processingError) {
-                  console.error('Processing error:', processingError);
-                  viewerContainer.innerHTML = '<div class="viewer-empty">Error processing PDF. Please try again.</div>';
-                  loadingOverlay.classList.add('hidden');
                 }
-              }, 500);
-            } else {
-              throw new Error('Upload failed');
-            }
-          } catch (error) {
-            console.error('Upload error:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            uploadStatus.textContent = '✗ Upload failed: ' + errorMessage;
-            uploadStatus.className = 'upload-status upload-error';
-            uploadButton.disabled = false;
-          }
-        });
 
-        // Poll for tool output
-        function updateDisplay() {
-          const toolOutput = window.openai?.toolOutput?.global_tool;
-          const outputKey = JSON.stringify(toolOutput ?? null);
-
-          if (outputKey !== lastOutput) {
-            lastOutput = outputKey;
-
-            // DEBUG: Log when toolOutput changes
-            console.log('Tool output updated:', toolOutput);
-            if (toolOutput && toolOutput.user_prompt) {
-              console.log('USER PROMPT FROM CHATGPT:', toolOutput.user_prompt);
-            }
-
-            if (toolOutput && toolOutput.response_html) {
-              // We have output! Switch to processing screen
-              uploadScreen.classList.add('hidden');
-              processingScreen.classList.add('active');
-
-              // Initialize viewer with response_html
-              if (!viewerInitialized) {
-                initializeViewer(toolOutput.response_html);
-                viewerInitialized = true;
-
-                // Hide loading overlay after viewer loads
-                setTimeout(function() {
-                  loadingOverlay.classList.add('hidden');
-                  detailsButton.classList.remove('hidden');
-                }, 1000);
+                // Always check status (even if data hasn't changed)
+                // This ensures we detect when viewerInitialized becomes true
+                if (toolOutput) {
+                  updateStatusSteps(toolOutput);
+                }
               }
-            }
-          }
-        }
 
-        // Initialize viewer with sandboxed iframe
-        function initializeViewer(responseHtml) {
-          try {
-            if (!responseHtml || responseHtml.trim().length === 0) {
-              viewerContainer.innerHTML = '<div class="viewer-empty">No viewer output available.</div>';
-              return;
-            }
+              // Initialize viewer with sandboxed iframe
+              function initializeViewer(responseHtml) {
+                try {
+                  if (!responseHtml || responseHtml.trim().length === 0) {
+                    viewerContainer.innerHTML = '<div class="viewer-empty">No viewer output available.</div>';
+                    return;
+                  }
 
-            // Create sandboxed iframe
-            const iframe = document.createElement('iframe');
-            iframe.id = 'viewer-iframe';
-            iframe.sandbox = 'allow-scripts allow-same-origin';
-            iframe.srcdoc = responseHtml;
+                  // Validate HTML
+                  const isValidHTML = responseHtml.includes('<!DOCTYPE html') || responseHtml.includes('<html');
 
-            viewerContainer.innerHTML = '';
-            viewerContainer.appendChild(iframe);
+                  if (!isValidHTML) {
+                    viewerContainer.innerHTML = '<div class="viewer-empty">Invalid HTML format. Expected complete HTML document.</div>';
+                    return;
+                  }
 
-            console.log('Viewer iframe initialized successfully');
-          } catch (error) {
-            console.error('Failed to initialize viewer:', error);
-            viewerContainer.innerHTML = '<div class="viewer-empty">Error initializing viewer</div>';
-          }
-        }
+                  // Create sandboxed iframe
+                  const iframe = document.createElement('iframe');
+                  iframe.id = 'viewer-iframe';
+                  iframe.sandbox = 'allow-scripts allow-same-origin';
+                  iframe.srcdoc = responseHtml;
 
-        // Initial update
-        updateDisplay();
+                  viewerContainer.innerHTML = '';
+                  viewerContainer.appendChild(iframe);
 
-        // Poll every 250ms for updates
-        setInterval(updateDisplay, 250);
-      })();
-    </script>
-  </body>
-</html>
+                  console.log('Viewer iframe initialized successfully');
+                } catch (error) {
+                  console.error('Failed to initialize viewer:', error);
+                  viewerContainer.innerHTML = '<div class="viewer-empty">Error initializing viewer: ' + (error && error.message ? error.message : 'Unknown error') + '</div>';
+                }
+              }
+
+              // Initial update
+              updateDisplay();
+
+              // Poll every 250ms for updates
+              setInterval(updateDisplay, 250);
+            })();
+          </script>
+        </body>
+      </html>
     `,
     description: "Displays user prompt, enhanced prompt, LLM response, and live generated viewer",
     widgetDomain: "https://cdn.cloud.pspdfkit.com",
@@ -1950,47 +1774,9 @@ Use this tool by default unless a task explicitly requires a specialized tool.
 
       try {
         console.log(`[MCP Tool] global_tool (PRIMARY) starting for: "${user_prompt.substring(0, 50)}..."`);
-
-        // ========== CRITICAL: TWO-STAGE FLOW ==========
-        // STAGE 1: NO PDF URL → Show upload widget only, DON'T process
-        // STAGE 2: PDF URL PROVIDED → NOW process with PromptOrchestrator
-
-        if (!pdf_url) {
-          console.log(`[MCP Tool] No PDF URL provided - showing upload widget only (NO processing)`);
-          console.log(`[MCP Tool] global_tool completed in ${Date.now() - toolStart}ms (upload stage)`);
-
-          // Return immediately WITHOUT calling PromptOrchestrator
-          // Widget will show upload UI, no spinner, no processing
-          return {
-            content: [
-              {
-                type: "text",
-                text: `📤 Please upload your PDF using the upload button in the widget above.\n\n💡 Once uploaded, provide the PDF URL to process it.`,
-              },
-            ],
-            structuredContent: {
-              global_tool: {
-                user_prompt,
-                enhanced_prompt: "",
-                provider: "none" as "anthropic" | "openai",
-                model_requested: "N/A",
-                model_used: "N/A",
-                response_text: "",
-                response_html: "", // Empty = widget shows upload screen
-                errors: [],
-                warnings: [],
-                upload_stage: true, // Flag to indicate upload-only stage
-              },
-              timestamp: new Date().toISOString(),
-            },
-            _meta: widgetMeta(globalToolWidget),
-          };
+        if (pdf_url) {
+          console.log(`[MCP Tool] PDF URL provided: ${pdf_url}`);
         }
-
-        // PDF URL PROVIDED → NOW start processing
-        console.log(`[MCP Tool] PDF URL provided: ${pdf_url}`);
-        console.log(`[MCP Tool] Starting PromptOrchestrator (processing stage)...`);
-
         const orchestratorStart = Date.now();
         const result = await PromptOrchestrator({ user_prompt, pdf_url });
         console.log(`[MCP Tool] PromptOrchestrator completed in ${Date.now() - orchestratorStart}ms`);
@@ -2005,7 +1791,7 @@ Use this tool by default unless a task explicitly requires a specialized tool.
           content: [
             {
               type: "text",
-              text: `✅ Generated using ${result.provider} (${result.model_used})\n\n💡 The generated code is displayed in the widget viewer above.\n\n📄 Using PDF: ${pdf_url}\n${statusLines ? "\n" + statusLines : ""}`,
+              text: `✅ Generated using ${result.provider} (${result.model_used})\n\n💡 The generated code is displayed in the widget viewer above.\n${statusLines ? "\n" + statusLines : ""}`,
             },
           ],
           structuredContent: {
@@ -2020,8 +1806,6 @@ Use this tool by default unless a task explicitly requires a specialized tool.
               errors: result.errors,
               available_models: result.available_models,
               warnings: result.warnings,
-              upload_stage: false, // Processing stage
-              pdf_url: pdf_url,
             },
             timestamp: new Date().toISOString(),
           },

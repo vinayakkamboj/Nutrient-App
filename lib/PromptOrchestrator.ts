@@ -4,6 +4,7 @@ import { prompt_manager } from "./prompt_manager";
 
 export interface PromptOrchestratorInput {
   user_prompt: string;
+  pdf_url?: string;
 }
 
 export interface PromptOrchestratorOutput {
@@ -80,13 +81,13 @@ function selectBestModel(models: string[]): string | null {
 export async function PromptOrchestrator(
   input: PromptOrchestratorInput
 ): Promise<PromptOrchestratorOutput> {
-  const { user_prompt } = input;
+  const { user_prompt, pdf_url } = input;
   const errors: string[] = [];
   const warnings: string[] = [];
   const provider = (process.env.LLM_PROVIDER?.toLowerCase() === "openai" ? "openai" : "anthropic") as "anthropic" | "openai";
 
   try {
-    const { enhanced_prompt } = prompt_manager({ user_prompt });
+    const { enhanced_prompt } = prompt_manager({ user_prompt, pdf_url });
     let response_text = "";
     let response_html = "";
     let modelRequested = "";
@@ -237,7 +238,7 @@ export async function PromptOrchestrator(
     console.error("PromptOrchestrator error:", error);
     const errorMsg = error instanceof Error ? error.message : "Unknown error";
     errors.push(errorMsg);
-    const { enhanced_prompt } = prompt_manager({ user_prompt });
+    const { enhanced_prompt } = prompt_manager({ user_prompt, pdf_url });
     return buildErrorResponse(user_prompt, enhanced_prompt, provider, "", "", errors, [], warnings);
   }
 }
