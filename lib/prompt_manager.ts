@@ -1,10 +1,5 @@
 /**
  * prompt_manager.ts - Smart Dynamic Nutrient Web SDK Prompt Manager
- *
- * DESIGN:
- * - SMALL PROMPTS: Only inject relevant code samples based on detected keywords
- * - CODE-FOCUSED: Real code examples, minimal documentation
- * - PRINCIPLE: Beyond Nutrient = reject; No detail = just open viewer with PDF
  */
 
 export interface PromptManagerInput {
@@ -29,18 +24,33 @@ RULES:
 3. NO OTHER PDF LIBRARIES (no pdf.js, jsPDF, pdf-lib, etc.)
 4. CDN: <script src="https://cdn.cloud.pspdfkit.com/pspdfkit-web@1.10.0/nutrient-viewer.js"></script>
 5. USE: const { NutrientViewer } = window;
+6. ONLY NUTRIENT WEB SDK APIs - No inventing APIs
+
+SCOPE RULES:
+- ONLY generate code for Nutrient Web SDK features
+- If request is OUT OF SCOPE (not supported by Nutrient), output: <!-- OUT_OF_SCOPE: [reason] -->
+- Link to docs when uncertain: https://www.nutrient.io/guides/web/
+- User creativity is WELCOME if it uses Nutrient SDK (e.g., custom navbar + viewer below)
+- If user request is vague or simple, just open the viewer with the PDF
+
+UNSUPPORTED FEATURES (MUST REJECT):
+- PDF compression / reduce size / optimize
+- Text extraction (not viewer feature)
+- OCR
+- Any non-Nutrient libraries
 `.trim();
 
 /**
- * BASE VIEWER - Always included
+ * BASE VIEWER (DEFAULT BEHAVIOR)
+ * Used when request is simple or unclear
  */
 const BASE_VIEWER = `
-BASE VIEWER TEMPLATE:
+BASE VIEWER TEMPLATE (DEFAULT):
 
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Viewer</title>
   <style>
     body { margin: 0; }
@@ -51,12 +61,13 @@ BASE VIEWER TEMPLATE:
   <div id="viewer"></div>
   <script src="https://cdn.cloud.pspdfkit.com/pspdfkit-web@1.10.0/nutrient-viewer.js"></script>
   <script>
-    (async function() {
+    (async function () {
       const { NutrientViewer } = window;
       const container = document.getElementById("viewer");
-      const instance = await NutrientViewer.load({
+
+      await NutrientViewer.load({
         container,
-        document: "document.pdf"
+        document: "DOCUMENT_PATH"
       });
     })();
   </script>
@@ -65,7 +76,7 @@ BASE VIEWER TEMPLATE:
 `.trim();
 
 /**
- * FORM FILLING CODE - Only when detected
+ * FORM FILLING (AUTOMATED + BUTTON-BASED)
  */
 const FORM_FILLING_CODE = `
 FORM FILLING EXAMPLES:
@@ -78,20 +89,17 @@ const instance = await NutrientViewer.load({
 });
 
 // Inspect all form fields (optional)
-const formFields = await instance.getFormFields();
-console.log("Form fields:", formFields.toJS?.() ?? formFields);
+const fields = await instance.getFormFields();
+console.log("Form fields:", fields.toJS?.() ?? fields);
 
-// Fill by field name
+// Fill by field name (MUST match exactly)
 await instance.setFormFieldValues({
-  "Client first and last name": "Nutrient Web SDK",
-  "Description 1": "Loaded Nutrient Web SDK successfully",
-  "Description 2": "Printed out all form fields in the JS Console",
-  "Description 3": "Now filling out the form fields programmatically"
+  "Client first and last name": "John Doe",
+  "Email": "john@example.com",
+  "Description": "Filled programmatically"
 });
 
-console.log("Form filled");
-
-B) Prefill at load with Instant JSON:
+B) Prefill at load with instantJSON:
 
 await NutrientViewer.load({
   container: document.getElementById("viewer"),
@@ -100,167 +108,127 @@ await NutrientViewer.load({
     format: "https://pspdfkit.com/instant-json/v1",
     formFieldValues: [
       {
-        name: "Form Field 1",
-        value: "Text for form field 1",
+        name: "Field Name",
+        value: "Field Value",
         type: "pspdfkit/form-field-value",
         v: 1
       }
     ]
   }
 });
+
+C) Custom Button Fill:
+
+<button id="fill-form-button">Fill Form</button>
+
+<script>
+let instance;
+
+(async () => {
+  instance = await NutrientViewer.load({
+    container: document.getElementById("viewer"),
+    document: "form.pdf"
+  });
+})();
+
+document.getElementById("fill-form-button")?.addEventListener("click", async () => {
+  if (!instance) return;
+
+  await instance.setFormFieldValues({
+    "Name": "John Doe",
+    "Email": "john@example.com"
+  });
+});
+</script>
+
+DOC: https://www.nutrient.io/guides/web/forms/form-filling/
 `.trim();
 
 /**
- * CREATE FORM FIELDS CODE - Only when detected
+ * SPLIT PDF (MANDATORY MULTI-INSTANCE PATTERN)
  */
-const CREATE_FORM_CODE = `
-CREATE TEXT FIELD:
+const SPLIT_PDF_CODE = `
+SPLIT PDF (MULTI-INSTANCE REQUIRED):
 
-const widget = new NutrientViewer.Annotations.WidgetAnnotation({
-  id: NutrientViewer.generateInstantId(),
-  pageIndex: 0,
-  formFieldName: "MyField",
-  boundingBox: new NutrientViewer.Geometry.Rect({ left: 100, top: 75, width: 200, height: 80 })
+RULES:
+- ALWAYS use multiple headless instances
+- NEVER use exportPDF() for split
+- Use exportPDFWithOperations with removePages
+
+EXAMPLE (Split 10-page PDF into two 5-page PDFs):
+
+// First half (pages 0-4)
+const instanceA = await NutrientViewer.load({
+  document: "input.pdf",
+  headless: true
 });
 
-const textField = new NutrientViewer.FormFields.TextFormField({
-  name: "MyField",
-  annotationIds: new NutrientViewer.Immutable.List([widget.id]),
-  value: "Default text"
+// Second half (pages 5-9)
+const instanceB = await NutrientViewer.load({
+  document: "input.pdf",
+  headless: true
 });
 
-await instance.create([widget, textField]);
+// Remove unwanted pages and export
+const fileA = await instanceA.exportPDFWithOperations([
+  { type: "removePages", pageIndexes: [5, 6, 7, 8, 9] }
+]);
 
-CREATE RADIO BUTTONS:
+const fileB = await instanceB.exportPDFWithOperations([
+  { type: "removePages", pageIndexes: [0, 1, 2, 3, 4] }
+]);
 
-const widget1 = new NutrientViewer.Annotations.WidgetAnnotation({
-  id: NutrientViewer.generateInstantId(),
-  pageIndex: 0,
-  formFieldName: "Choice",
-  boundingBox: new NutrientViewer.Geometry.Rect({ left: 100, top: 100, width: 20, height: 20 })
-});
+console.log("Split result A:", fileA.byteLength);
+console.log("Split result B:", fileB.byteLength);
 
-const widget2 = new NutrientViewer.Annotations.WidgetAnnotation({
-  id: NutrientViewer.generateInstantId(),
-  pageIndex: 0,
-  formFieldName: "Choice",
-  boundingBox: new NutrientViewer.Geometry.Rect({ left: 130, top: 100, width: 20, height: 20 })
-});
+FOR EXAMPLE THINK THIS
 
-const radioField = new NutrientViewer.FormFields.RadioButtonFormField({
-  name: "Choice",
-  annotationIds: new NutrientViewer.Immutable.List([widget1.id, widget2.id]),
-  options: new NutrientViewer.Immutable.List([
-    new NutrientViewer.FormOption({ label: "Option 1", value: "1" }),
-    new NutrientViewer.FormOption({ label: "Option 2", value: "2" })
-  ])
-});
-
-await instance.create([widget1, widget2, radioField]);
-
-CREATE CHECKBOX:
-
-const checkWidget = new NutrientViewer.Annotations.WidgetAnnotation({
-  id: NutrientViewer.generateInstantId(),
-  pageIndex: 0,
-  formFieldName: "Agree",
-  boundingBox: new NutrientViewer.Geometry.Rect({ left: 100, top: 200, width: 20, height: 20 })
-});
-
-const checkField = new NutrientViewer.FormFields.CheckBoxFormField({
-  name: "Agree",
-  annotationIds: new NutrientViewer.Immutable.List([checkWidget.id]),
-  options: new NutrientViewer.Immutable.List([
-    new NutrientViewer.FormOption({ label: "Yes", value: "1" })
-  ])
-});
-
-await instance.create([checkWidget, checkField]);
+DOC: https://www.nutrient.io/guides/web/editor/split/
 `.trim();
 
 /**
- * DELETE PAGES CODE - Only when detected
+ * DELETE PAGES
  */
 const DELETE_PAGES_CODE = `
-DELETE PAGES EXAMPLES:
+DELETE PAGES:
 
 const instance = await NutrientViewer.load({
   container: document.getElementById("viewer"),
   document: "input.pdf"
 });
 
-// Option 1: keepPages – remove everything except these pages
+// Option 1: keepPages (keep only these pages)
 await instance.applyOperations([
-  {
-    type: "keepPages",
-    pageIndexes: [0, 1, 2] // keep only pages 0–2
-  }
+  { type: "keepPages", pageIndexes: [0, 1, 2] }
 ]);
 
-// Option 2: removePages – remove specific pages
-// await instance.applyOperations([
-//   {
-//     type: "removePages",
-//     pageIndexes: [8, 9, 11] // remove pages 8, 9, 11
-//   }
-// ]);
+// Option 2: removePages (remove specific pages)
+await instance.applyOperations([
+  { type: "removePages", pageIndexes: [3, 4, 5] }
+]);
 
-// Export the final PDF
+// Export the result
 const buffer = await instance.exportPDF();
-console.log("Exported PDF buffer length:", buffer.byteLength);
+console.log("Exported PDF size:", buffer.byteLength);
+
+DOC: https://www.nutrient.io/guides/web/editor/page-manipulation/remove/
 `.trim();
 
 /**
- * SPLIT PDF CODE - Only when detected
- */
-const SPLIT_PDF_CODE = `
-SPLIT PDF EXAMPLE:
-
-// Split a 10-page document into two 5-page PDFs
-
-// First half (pages 0–4)
-const instanceA = await NutrientViewer.load({
-  document: "input.pdf",
-  headless: true
-});
-
-// Second half (pages 5–9)
-const instanceB = await NutrientViewer.load({
-  document: "input.pdf",
-  headless: true
-});
-
-// Remove unwanted pages from each instance and export
-const fileA = await instanceA.exportPDFWithOperations([
-  {
-    type: "removePages",
-    pageIndexes: [5, 6, 7, 8, 9] // keep only 0–4
-  }
-]);
-
-const fileB = await instanceB.exportPDFWithOperations([
-  {
-    type: "removePages",
-    pageIndexes: [0, 1, 2, 3, 4] // keep only 5–9
-  }
-]);
-
-console.log("Split result A length:", fileA.byteLength);
-console.log("Split result B length:", fileB.byteLength);
-`.trim();
-
-/**
- * MERGE PDFs CODE - Only when detected
+ * MERGE PDFs
  */
 const MERGE_PDF_CODE = `
-MERGE PDFs EXAMPLE:
+MERGE PDFs:
 
 const instance = await NutrientViewer.load({
   container: document.getElementById("viewer"),
   document: "first.pdf"
 });
 
+// Fetch second PDF
 const blob = await fetch("second.pdf").then(r => r.blob());
+
+// Import at beginning (beforePageIndex: 0)
 await instance.applyOperations([{
   type: "importDocument",
   document: blob,
@@ -268,181 +236,139 @@ await instance.applyOperations([{
 }]);
 
 const buffer = await instance.exportPDF();
-console.log("Merged PDF buffer length:", buffer.byteLength);
+console.log("Merged PDF size:", buffer.byteLength);
+
+DOC: https://www.nutrient.io/guides/web/editor/page-manipulation/
 `.trim();
 
 /**
- * IMAGE TO PDF CODE - Only when detected
+ * IMAGE TO PDF
  */
 const IMAGE_TO_PDF_CODE = `
-IMAGE TO PDF EXAMPLES:
-
-A) Simple convert (with UI):
+IMAGE TO PDF:
 
 const instance = await NutrientViewer.load({
   container: "#viewer",
-  document: "source.png",
-  licenseKey: "YOUR_LICENSE_KEY"
+  document: "source.png"
 });
 
+// Export as PDF
 const buffer = await instance.exportPDF();
-console.log("Exported PDF buffer length:", buffer.byteLength);
 
-B) Headless convert + download as PDF/A:
-
-const instance = await NutrientViewer.load({
-  container: "#pspdfkit",
-  document: "source.png",
-  licenseKey: "YOUR_LICENSE_KEY",
-  headless: true
-});
-
-const buffer = await instance.exportPDF({
+// Optional: Export as PDF/A
+const bufferPDFA = await instance.exportPDF({
   outputFormat: {
     conformance: NutrientViewer.Conformance.PDFA_4F
   }
 });
 
-const blob = new Blob([buffer], { type: "application/pdf" });
-const objectUrl = window.URL.createObjectURL(blob);
-
-const a = document.createElement("a");
-a.href = objectUrl;
-a.style.display = "none";
-a.download = "output.pdf";
-document.body.appendChild(a);
-a.click();
-document.body.removeChild(a);
-window.URL.revokeObjectURL(objectUrl);
+DOC: https://www.nutrient.io/guides/web/conversion/image-to-pdf/
 `.trim();
 
 /**
- * OFFICE TO PDF CODE - Only when detected
+ * OFFICE TO PDF
  */
 const OFFICE_TO_PDF_CODE = `
-OFFICE (DOCX) TO PDF EXAMPLE:
+OFFICE (DOCX) TO PDF:
 
 const instance = await NutrientViewer.load({
   container: "#viewer",
-  document: "source.docx",
-  licenseKey: "YOUR_LICENSE_KEY"
+  document: "source.docx"
 });
 
-// Simple export to PDF
+// Export as PDF
 const buffer = await instance.exportPDF();
 
-// Or export as PDF/A-4f
-// const buffer = await instance.exportPDF({
-//   outputFormat: {
-//     conformance: NutrientViewer.Conformance.PDFA_4F
-//   }
-// });
-
-const blob = new Blob([buffer], { type: "application/pdf" });
-const objectUrl = window.URL.createObjectURL(blob);
-
-const a = document.createElement("a");
-a.href = objectUrl;
-a.style.display = "none";
-a.download = "output.pdf";
-document.body.appendChild(a);
-a.click();
-document.body.removeChild(a);
-window.URL.revokeObjectURL(objectUrl);
-`.trim();
-
-/**
- * NAVBAR CODE - Only when detected
- */
-const NAVBAR_CODE = `
-NAVBAR (ONLY IF REQUESTED):
-
-<style>
-  body { margin: 0; display: flex; flex-direction: column; height: 100vh; }
-  .navbar {
-    height: 56px;
-    background: #1a1414;
-    color: white;
-    display: flex;
-    align-items: center;
-    padding: 0 20px;
-    border-bottom: 1px solid #3a3434;
+// Optional: Export as PDF/A
+const bufferPDFA = await instance.exportPDF({
+  outputFormat: {
+    conformance: NutrientViewer.Conformance.PDFA_4F
   }
-  .navbar-title { font-size: 18px; font-weight: 500; }
-  #viewer { flex: 1; }
-</style>
+});
 
-<div class="navbar">
-  <div class="navbar-title">Nutrient Viewer</div>
-</div>
-<div id="viewer"></div>
+DOC: https://www.nutrient.io/guides/web/conversion/office-to-pdf/
 `.trim();
 
 /**
- * Build enhanced prompt - STATIC: Always includes ALL examples
+ * Keyword detection helpers
+ */
+function includesAny(text: string, keywords: string[]) {
+  return keywords.some(k => text.includes(k));
+}
+
+/**
+ * Build enhanced prompt (DYNAMIC, NO DUPLICATION)
  */
 function buildEnhancedPrompt(userPrompt: string, pdfUrl?: string): string {
   const parts: string[] = [];
+  const lower = userPrompt.toLowerCase();
 
   // Core rules
   parts.push(CORE_RULES);
   parts.push("");
 
-  // Base viewer
+  // Document path
+  const documentPath = pdfUrl || "document.pdf";
+  parts.push(`DOCUMENT PATH: "${documentPath}"`);
+  parts.push("Replace DOCUMENT_PATH in examples with this value.");
+  parts.push("");
+
+  // Default behavior
+  parts.push("DEFAULT BEHAVIOR:");
   parts.push(BASE_VIEWER);
   parts.push("");
 
-  // ALL CODE SAMPLES - NO CONDITIONS
-  parts.push("FORM FILLING:");
-  parts.push(FORM_FILLING_CODE);
-  parts.push("");
-
-  parts.push("CREATE FORM FIELDS:");
-  parts.push(CREATE_FORM_CODE);
-  parts.push("");
-
-  parts.push("DELETE PAGES:");
-  parts.push(DELETE_PAGES_CODE);
-  parts.push("");
-
-  parts.push("SPLIT PDF:");
-  parts.push(SPLIT_PDF_CODE);
-  parts.push("");
-
-  parts.push("MERGE PDFs:");
-  parts.push(MERGE_PDF_CODE);
-  parts.push("");
-
-  parts.push("IMAGE TO PDF:");
-  parts.push(IMAGE_TO_PDF_CODE);
-  parts.push("");
-
-  parts.push("OFFICE TO PDF:");
-  parts.push(OFFICE_TO_PDF_CODE);
-  parts.push("");
-
-  parts.push("NAVBAR:");
-  parts.push(NAVBAR_CODE);
-  parts.push("");
-
-  // PDF URL
-  if (pdfUrl) {
-    parts.push("UPLOADED PDF:");
-    parts.push(`USER UPLOADED: ${pdfUrl}`);
-    parts.push(`YOU MUST USE: document: "${pdfUrl}"`);
+  // Conditional code injection based on keywords
+  if (includesAny(lower, ["fill", "form", "populate", "prefill"])) {
+    parts.push("=== FORM FILLING ===");
+    parts.push(FORM_FILLING_CODE);
     parts.push("");
   }
 
-  // Principles
-  parts.push("PRINCIPLE:");
-  parts.push("- If request is BEYOND Nutrient Web SDK, output HTML comment: <!-- OUT_OF_SCOPE: reason -->");
-  parts.push("- If request is SIMPLE/NO DETAIL, just open viewer with uploaded PDF");
-  parts.push("- DEFAULT: Viewer with uploaded PDF, NO navbar unless requested");
-  parts.push("");
+  if (includesAny(lower, ["split"])) {
+    parts.push("=== SPLIT PDF ===");
+    parts.push(SPLIT_PDF_CODE);
+    parts.push("");
+  }
+
+  if (includesAny(lower, ["delete", "remove page", "trim", "keep page"])) {
+    parts.push("=== DELETE PAGES ===");
+    parts.push(DELETE_PAGES_CODE);
+    parts.push("");
+  }
+
+  if (includesAny(lower, ["merge", "combine", "join"])) {
+    parts.push("=== MERGE PDFs ===");
+    parts.push(MERGE_PDF_CODE);
+    parts.push("");
+  }
+
+  if (includesAny(lower, ["image", "png", "jpg", "jpeg", "picture"])) {
+    parts.push("=== IMAGE TO PDF ===");
+    parts.push(IMAGE_TO_PDF_CODE);
+    parts.push("");
+  }
+
+  if (includesAny(lower, ["docx", "office", "word", "excel", "powerpoint"])) {
+    parts.push("=== OFFICE TO PDF ===");
+    parts.push(OFFICE_TO_PDF_CODE);
+    parts.push("");
+  }
 
   // User request
+  parts.push("======================");
   parts.push("USER REQUEST:");
   parts.push(userPrompt);
+  parts.push("======================");
+  parts.push("");
+
+  // Final instructions
+  parts.push("INSTRUCTIONS:");
+  parts.push("1. If user request is VAGUE or SIMPLE: use BASE VIEWER with the provided DOCUMENT PATH");
+  parts.push("2. If user wants CUSTOM UI (navbar, buttons, etc.) + Nutrient viewer: ACCEPT and implement");
+  parts.push("3. Use ONLY the code examples provided above - DO NOT invent Nutrient APIs");
+  parts.push("4. If request is OUT OF SCOPE: output <!-- OUT_OF_SCOPE: [reason] --> and link to docs");
+  parts.push("5. Prefer citing documentation when uncertain");
 
   return parts.join("\n");
 }
@@ -452,10 +378,9 @@ function buildEnhancedPrompt(userPrompt: string, pdfUrl?: string): string {
  */
 export function prompt_manager(input: PromptManagerInput): PromptManagerOutput {
   const { user_prompt, pdf_url } = input;
-  const enhanced_prompt = buildEnhancedPrompt(user_prompt, pdf_url);
 
   return {
     user_prompt,
-    enhanced_prompt,
+    enhanced_prompt: buildEnhancedPrompt(user_prompt, pdf_url),
   };
 }
