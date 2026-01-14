@@ -49,3 +49,7 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+// Allow longer execution time for complex prompts
+export const runtime = 'nodejs';
+export const maxDuration = 300; // 5 minutes max duration

@@ -103,7 +103,8 @@ export async function PromptOrchestrator(
 
       const anthropic = new Anthropic({
         apiKey,
-        timeout: 30000, // 30 second timeout for all requests
+        timeout: 120000, // 120 second (2 minute) timeout
+        maxRetries: 3, // Retry up to 3 times on network errors
       });
       modelRequested = process.env.LLM_MODEL || "claude-sonnet-4-5-20250929";
       modelUsed = modelRequested;
@@ -111,7 +112,7 @@ export async function PromptOrchestrator(
       try {
         const completion = await anthropic.messages.create({
           model: modelRequested,
-          max_tokens: 4096,
+          max_tokens: 8192, // Increased for complex outputs
           temperature: 0.3,
           messages: [{ role: "user", content: enhanced_prompt }],
         });
@@ -126,6 +127,37 @@ export async function PromptOrchestrator(
           response_html = createErrorHTML("Unexpected response format", provider, modelRequested, modelUsed, [], "");
         }
       } catch (firstError: any) {
+        // Check for timeout errors
+        const isTimeout = firstError?.message?.toLowerCase()?.includes("timeout") ||
+                         firstError?.code === "ETIMEDOUT" ||
+                         firstError?.name === "TimeoutError";
+
+        if (isTimeout) {
+          errors.push("Request timed out. The model took too long to respond.");
+          errors.push("This usually means the prompt is complex. Try simplifying your request or try again.");
+          response_text = "Error: Request timed out";
+          response_html = createErrorHTML(
+            "Request timed out. The prompt may be too complex or the API is slow. Please try again with a simpler request.",
+            provider,
+            modelRequested,
+            modelUsed,
+            [],
+            firstError?.requestID || ""
+          );
+
+          return {
+            user_prompt,
+            enhanced_prompt,
+            provider,
+            model_requested: modelRequested,
+            model_used: modelUsed,
+            response_text,
+            response_html,
+            errors,
+            warnings: warnings.length > 0 ? warnings : undefined,
+          };
+        }
+
         const isModelNotFound = firstError?.status === 404 &&
           (firstError?.error?.type === "not_found_error" || firstError?.message?.includes("model"));
         const requestId = firstError?.requestID || "";
@@ -141,7 +173,7 @@ export async function PromptOrchestrator(
               try {
                 const completion = await anthropic.messages.create({
                   model: fallbackModel,
-                  max_tokens: 4096,
+                  max_tokens: 8192, // Increased for complex outputs
                   temperature: 0.3,
                   messages: [{ role: "user", content: enhanced_prompt }],
                 });
@@ -201,7 +233,8 @@ export async function PromptOrchestrator(
 
       const openai = new OpenAI({
         apiKey,
-        timeout: 30000, // 30 second timeout for all requests
+        timeout: 120000, // 120 second (2 minute) timeout
+        maxRetries: 3, // Retry up to 3 times on network errors
       });
       modelRequested = process.env.LLM_MODEL || "gpt-4o-mini";
       modelUsed = modelRequested;
@@ -215,7 +248,7 @@ export async function PromptOrchestrator(
           },
           { role: "user", content: enhanced_prompt },
         ],
-        max_tokens: 4096,
+        max_tokens: 8192, // Increased for complex outputs
         temperature: 0.3,
       });
 
