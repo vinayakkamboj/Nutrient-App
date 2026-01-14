@@ -12,6 +12,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // ALWAYS return JSON, even on catastrophic failure
   try {
     console.log("[Upload API] START");
+    console.log("[Upload API] Headers:", Object.fromEntries(request.headers));
 
     let formData;
     try {
@@ -55,17 +56,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
+    // Always ensure uploads directory exists - create if not present
     const uploadsDir = path.join(process.cwd(), "public", "uploads");
+    console.log(`[Upload API] Uploads dir: ${uploadsDir}`);
 
     try {
+      // Always try to create directory (recursive: true won't error if exists)
+      await mkdir(uploadsDir, { recursive: true });
+      console.log("[Upload API] Uploads directory ensured");
+
+      // Verify directory exists and is writable
       if (!existsSync(uploadsDir)) {
-        console.log("[Upload API] Creating uploads dir");
-        await mkdir(uploadsDir, { recursive: true });
+        throw new Error("Directory creation failed - directory does not exist after creation");
       }
     } catch (e) {
-      console.error("[Upload API] Failed to create directory:", e);
+      console.error("[Upload API] Failed to create/verify directory:", e);
+      const errorMsg = e instanceof Error ? e.message : "Unknown error";
       return NextResponse.json(
-        { success: false, error: "Failed to create upload directory" },
+        { success: false, error: `Failed to create upload directory: ${errorMsg}` },
         { status: 500 }
       );
     }
@@ -77,13 +85,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const filePath = path.join(uploadsDir, fileName);
 
     try {
+      console.log(`[Upload API] Writing file to: ${filePath}`);
       const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);
       await writeFile(filePath, buffer);
+
+      // Verify file was written
+      if (!existsSync(filePath)) {
+        throw new Error("File write failed - file does not exist after write");
+      }
+
+      console.log(`[Upload API] File written successfully: ${fileName}`);
     } catch (e) {
       console.error("[Upload API] Failed to write file:", e);
+      const errorMsg = e instanceof Error ? e.message : "Unknown error";
       return NextResponse.json(
-        { success: false, error: "Failed to save file" },
+        { success: false, error: `Failed to save file: ${errorMsg}` },
         { status: 500 }
       );
     }
@@ -99,7 +116,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         size: file.size,
         type: file.type,
       },
-      { status: 200 }
+      {
+        status: 200,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+        },
+      }
     );
 
   } catch (error) {
@@ -113,6 +137,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { status: 500 }
     );
   }
+}
+
+// Handle OPTIONS for CORS preflight
+export async function OPTIONS(): Promise<NextResponse> {
+  return NextResponse.json(
+    {},
+    {
+      status: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      },
+    }
+  );
 }
 
 export const runtime = 'nodejs';
