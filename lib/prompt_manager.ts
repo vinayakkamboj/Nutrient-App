@@ -106,55 +106,390 @@ BASE VIEWER TEMPLATE (DEFAULT):
 `.trim();
 
 /**
- * FORM FILLING - LOGIC ONLY
+ * FORM FILLING - AUTOMATIC + MANUAL HYBRID
  */
 const FORM_FILLING_CODE = `
-FORM FILLING LOGIC:
+FORM FILLING LOGIC - AUTOMATIC FIELD DETECTION + MANUAL SIDEBAR:
 
-CRITICAL: Field names MUST match exactly. Use getFormFields() to inspect first.
+🚨 CRITICAL REQUIREMENTS FOR FORM FILLING:
+1. AUTOMATICALLY detect and fill common form fields on page load
+2. Show a COLLAPSIBLE SIDEBAR for field inspection and manual filling
+3. Sidebar MUST be hideable to just a small button (40-50px)
+4. Use smart field name matching (case-insensitive, fuzzy matching)
 
-// 1. INSPECT FIELDS (show in dropdown/select)
-const formFields = await instance.getFormFields();
-const jsFields = formFields.toJS ? formFields.toJS() : formFields;
+STEP-BY-STEP IMPLEMENTATION:
 
-// Display in <select> dropdown:
-jsFields.forEach(field => {
-  const option = document.createElement('option');
-  option.value = field.name;
-  option.textContent = field.name;
-  selectElement.appendChild(option);
+// ========== STEP 1: AUTOMATIC FIELD DETECTION & FILLING ==========
+// Run this automatically when viewer loads
+
+async function autoFillForm() {
+  // Get all form fields
+  const formFields = await instance.getFormFields();
+  const jsFields = formFields.toJS ? formFields.toJS() : formFields;
+
+  // Smart field matching - detects common fields automatically
+  const fieldMap = {};
+
+  jsFields.forEach(field => {
+    const fieldNameLower = field.name.toLowerCase().replace(/[_-\s]/g, '');
+
+    // First Name detection
+    if (fieldNameLower.includes('firstname') || fieldNameLower.includes('fname') || fieldNameLower === 'first') {
+      fieldMap[field.name] = 'John'; // Auto-fill with sample or user-provided data
+    }
+    // Last Name detection
+    else if (fieldNameLower.includes('lastname') || fieldNameLower.includes('lname') || fieldNameLower === 'last') {
+      fieldMap[field.name] = 'Doe';
+    }
+    // Email detection
+    else if (fieldNameLower.includes('email') || fieldNameLower.includes('mail')) {
+      fieldMap[field.name] = 'john.doe@example.com';
+    }
+    // Phone detection
+    else if (fieldNameLower.includes('phone') || fieldNameLower.includes('tel') || fieldNameLower.includes('mobile')) {
+      fieldMap[field.name] = '+1 (555) 123-4567';
+    }
+    // Address detection
+    else if (fieldNameLower.includes('address') || fieldNameLower.includes('street')) {
+      fieldMap[field.name] = '123 Main Street';
+    }
+    // City detection
+    else if (fieldNameLower.includes('city')) {
+      fieldMap[field.name] = 'New York';
+    }
+    // State detection
+    else if (fieldNameLower.includes('state') || fieldNameLower.includes('province')) {
+      fieldMap[field.name] = 'NY';
+    }
+    // ZIP code detection
+    else if (fieldNameLower.includes('zip') || fieldNameLower.includes('postal')) {
+      fieldMap[field.name] = '10001';
+    }
+    // Date detection
+    else if (fieldNameLower.includes('date')) {
+      fieldMap[field.name] = new Date().toLocaleDateString();
+    }
+  });
+
+  // Auto-fill detected fields
+  if (Object.keys(fieldMap).length > 0) {
+    await instance.setFormFieldValues(fieldMap);
+    console.log('Auto-filled fields:', Object.keys(fieldMap));
+    showNotification(\`Auto-filled \${Object.keys(fieldMap).length} fields\`);
+  }
+
+  return jsFields; // Return all fields for sidebar display
+}
+
+// ========== STEP 2: COLLAPSIBLE SIDEBAR UI ==========
+// HTML Structure (add to body):
+
+<button id="toggle-sidebar-btn" class="sidebar-toggle-btn">
+  ☰ Form Fields
+</button>
+
+<div id="form-sidebar" class="form-sidebar">
+  <div class="sidebar-header">
+    <h3>Form Fields</h3>
+    <button id="close-sidebar-btn" class="close-btn">×</button>
+  </div>
+
+  <div class="sidebar-content">
+    <!-- Auto-filled fields summary -->
+    <div class="section">
+      <h4>Auto-Filled Fields</h4>
+      <div id="auto-filled-list"></div>
+    </div>
+
+    <!-- Manual field filling -->
+    <div class="section">
+      <h4>Manual Fill</h4>
+      <select id="field-select" class="form-select">
+        <option value="">Select a field...</option>
+      </select>
+      <input type="text" id="field-value" class="form-input" placeholder="Enter value...">
+      <button id="fill-btn" class="btn-primary">Fill Field</button>
+    </div>
+
+    <!-- All fields inspector -->
+    <div class="section">
+      <h4>All Fields</h4>
+      <button id="inspect-btn" class="btn-secondary">Inspect All Fields</button>
+      <div id="fields-list"></div>
+    </div>
+
+    <!-- Export -->
+    <div class="section">
+      <button id="export-btn" class="btn-success">Export Filled PDF</button>
+    </div>
+  </div>
+</div>
+
+// ========== STEP 3: SIDEBAR STYLING (USE DESIGN SYSTEM) ==========
+
+.sidebar-toggle-btn {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  width: 45px;
+  height: 45px;
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+.sidebar-toggle-btn:hover {
+  background: #2563eb;
+  transform: translateX(-2px);
+}
+.sidebar-toggle-btn.hidden {
+  display: none;
+}
+
+.form-sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 380px;
+  height: 100vh;
+  background: #2a2424;
+  border-left: 1px solid #3a3434;
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  z-index: 1001;
+  overflow-y: auto;
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.5);
+}
+.form-sidebar.open {
+  transform: translateX(0);
+}
+
+.sidebar-header {
+  position: sticky;
+  top: 0;
+  background: #1a1414;
+  padding: 16px 20px;
+  border-bottom: 1px solid #3a3434;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 10;
+}
+.sidebar-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+.close-btn {
+  background: transparent;
+  border: none;
+  color: #888;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.2s;
+}
+.close-btn:hover {
+  color: #fff;
+}
+
+.sidebar-content {
+  padding: 20px;
+}
+.section {
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #3a3434;
+}
+.section:last-child {
+  border-bottom: none;
+}
+.section h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ccc;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.form-select, .form-input {
+  width: 100%;
+  background: #252020;
+  border: 1px solid #3a3434;
+  border-radius: 8px;
+  color: #fff;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-family: 'DM Sans', sans-serif;
+  margin-bottom: 10px;
+}
+.form-select:focus, .form-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.btn-primary, .btn-secondary, .btn-success {
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'DM Sans', sans-serif;
+}
+.btn-primary {
+  background: #3b82f6;
+  color: #fff;
+}
+.btn-primary:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+.btn-secondary {
+  background: #252020;
+  color: #fff;
+  border: 1px solid #3a3434;
+}
+.btn-secondary:hover {
+  background: #3a3434;
+}
+.btn-success {
+  background: #10b981;
+  color: #fff;
+}
+.btn-success:hover {
+  background: #059669;
+  transform: translateY(-1px);
+}
+
+#fields-list {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 12px;
+}
+.field-item {
+  padding: 8px 12px;
+  background: #252020;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #999;
+  border: 1px solid #3a3434;
+}
+.field-item strong {
+  color: #fff;
+  display: block;
+  margin-bottom: 4px;
+}
+
+// ========== STEP 4: SIDEBAR JAVASCRIPT ==========
+
+const toggleBtn = document.getElementById('toggle-sidebar-btn');
+const sidebar = document.getElementById('form-sidebar');
+const closeBtn = document.getElementById('close-sidebar-btn');
+const fieldSelect = document.getElementById('field-select');
+const fieldValue = document.getElementById('field-value');
+const fillBtn = document.getElementById('fill-btn');
+const inspectBtn = document.getElementById('inspect-btn');
+const exportBtn = document.getElementById('export-btn');
+const fieldsList = document.getElementById('fields-list');
+const autoFilledList = document.getElementById('auto-filled-list');
+
+let allFields = [];
+
+// Toggle sidebar
+toggleBtn.addEventListener('click', () => {
+  sidebar.classList.add('open');
+  toggleBtn.classList.add('hidden');
 });
 
-// 2. FILL SPECIFIC FIELD (from dropdown selection)
-const selectedFieldName = selectElement.value;
-await instance.setFormFieldValues({
-  [selectedFieldName]: inputValue
+closeBtn.addEventListener('click', () => {
+  sidebar.classList.remove('open');
+  toggleBtn.classList.remove('hidden');
 });
 
-// 3. FILL MULTIPLE FIELDS (smart matching with variations)
-const fieldMappings = {
-  "First Name": firstName,
-  "first name": firstName,
-  "FirstName": firstName,
-  "Last Name": lastName,
-  "last name": lastName,
-  "Email": email,
-  "email": email,
-  // Add more variations...
-};
-await instance.setFormFieldValues(fieldMappings);
+// Initialize: Auto-fill and populate sidebar
+(async function init() {
+  allFields = await autoFillForm();
 
-// 4. EXPORT FILLED PDF
-const pdfBuffer = await instance.exportPDF();
-const blob = new Blob([pdfBuffer], { type: "application/pdf" });
-// Download or display
+  // Populate field dropdown
+  allFields.forEach(field => {
+    const option = document.createElement('option');
+    option.value = field.name;
+    option.textContent = field.name;
+    fieldSelect.appendChild(option);
+  });
 
-WORKFLOW PATTERN:
-1. Button: Inspect Fields → populate dropdown with field.name
-2. Dropdown: Select field to fill
-3. Input: Enter value for selected field
-4. Button: Fill selected field or fill all fields
-5. Button: Export/Download filled PDF
+  // Show auto-filled summary
+  const autoFilledFields = await instance.getFormFieldValues();
+  if (autoFilledFields.size > 0) {
+    autoFilledList.innerHTML = '<div class="field-item"><strong>Successfully filled ' + autoFilledFields.size + ' fields</strong></div>';
+  }
+})();
+
+// Manual fill selected field
+fillBtn.addEventListener('click', async () => {
+  const fieldName = fieldSelect.value;
+  const value = fieldValue.value;
+
+  if (!fieldName || !value) {
+    alert('Please select a field and enter a value');
+    return;
+  }
+
+  await instance.setFormFieldValues({ [fieldName]: value });
+  showNotification(\`Filled: \${fieldName}\`);
+  fieldValue.value = '';
+});
+
+// Inspect all fields
+inspectBtn.addEventListener('click', () => {
+  fieldsList.innerHTML = '';
+  allFields.forEach(field => {
+    const div = document.createElement('div');
+    div.className = 'field-item';
+    div.innerHTML = \`<strong>\${field.name}</strong>Type: \${field.type || 'unknown'}\`;
+    fieldsList.appendChild(div);
+  });
+});
+
+// Export filled PDF
+exportBtn.addEventListener('click', async () => {
+  const pdfBuffer = await instance.exportPDF();
+  const blob = new Blob([pdfBuffer], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'filled-form.pdf';
+  a.click();
+  URL.revokeObjectURL(url);
+  showNotification('PDF exported successfully!');
+});
+
+// Notification helper
+function showNotification(message) {
+  // Add a toast notification (implement as needed)
+  console.log('Notification:', message);
+}
+
+// ========== COMPLETE WORKFLOW ==========
+// 1. Auto-fill runs on load, detects and fills common fields
+// 2. Sidebar opens with toggle button (collapsible)
+// 3. User can inspect fields, manually fill missing ones
+// 4. Export filled PDF with one click
 
 Doc: https://www.nutrient.io/guides/web/forms/form-filling/
 `.trim();
@@ -384,50 +719,93 @@ function buildEnhancedPrompt(userPrompt: string, pdfUrl?: string): string {
   parts.push("");
   parts.push("⚠️ ATTENTION: Examples above are LOGIC PATTERNS ONLY - NOT design templates!");
   parts.push("");
-  parts.push("YOUR MISSION:");
-  parts.push("Create a UNIQUE, BEAUTIFUL, STUNNING design every single time");
-  parts.push("NEVER copy the same layout, colors, or structure");
-  parts.push("Push creative boundaries - use gradients, shadows, animations");
-  parts.push(" Think modern UI/UX: smooth transitions, beautiful typography, professional polish");
-  parts.push("Experiment with different layouts each time (sidebar left/right/bottom, tabs, cards, etc.)");
-  parts.push("Choose unique color palettes: try black, white,dark and light themes something but this cud be anything");
-  parts.push("Make it look like a professional SaaS product, please make sure if you dont find enough about nutrient sdk from here go at nutrient.io for full documentation fetch");
+  parts.push("🎨 REQUIRED DESIGN SYSTEM - USE THIS EXACT DESIGN:");
   parts.push("");
-  parts.push("CRITICAL REQUIREMENTS:");
+  parts.push("COLORS (MUST USE THESE EXACT VALUES):");
+  parts.push("- Background (body): #1a1414");
+  parts.push("- Secondary background (panels, cards): #2a2424");
+  parts.push("- Tertiary background (hover states): #252020");
+  parts.push("- Border color: #3a3434");
+  parts.push("- Primary action color (buttons): #3b82f6");
+  parts.push("- Primary hover: #2563eb");
+  parts.push("- Text (primary): #fff");
+  parts.push("- Text (secondary): #ccc");
+  parts.push("- Text (muted): #999");
+  parts.push("- Text (disabled): #888");
+  parts.push("- Text (very muted): #666");
+  parts.push("- Success color: #10b981");
+  parts.push("- Error color: #ef4444");
+  parts.push("");
+  parts.push("TYPOGRAPHY (MUST USE DM Sans):");
+  parts.push("- Include this in <head>:");
+  parts.push('  <link rel="preconnect" href="https://fonts.googleapis.com">');
+  parts.push('  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>');
+  parts.push('  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=block">');
+  parts.push("");
+  parts.push("- Apply to ALL elements:");
+  parts.push('  font-family: "DM Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial !important;');
+  parts.push("");
+  parts.push("- Font weights:");
+  parts.push("  * 300 = Light (for subtle text)");
+  parts.push("  * 400 = Regular (body text)");
+  parts.push("  * 500 = Medium (buttons, labels)");
+  parts.push("  * 600 = Semibold (headings)");
+  parts.push("");
+  parts.push("BUTTON STYLING:");
+  parts.push("- Primary buttons: background #3b82f6, color #fff, border-radius 8px, padding 10px 24px");
+  parts.push("- Hover: background #2563eb, transform translateY(-1px)");
+  parts.push("- Disabled: opacity 0.5, cursor not-allowed");
+  parts.push("- Font: 14px, weight 500");
+  parts.push("- Transition: all 0.2s ease");
+  parts.push("");
+  parts.push("INPUT/SELECT STYLING:");
+  parts.push("- Background: #252020");
+  parts.push("- Border: 1px solid #3a3434");
+  parts.push("- Border-radius: 8px");
+  parts.push("- Color: #fff");
+  parts.push("- Padding: 10px 14px");
+  parts.push("- Font: 14px DM Sans");
+  parts.push("");
+  parts.push("CRITICAL LAYOUT REQUIREMENTS:");
   parts.push("🚨 VIEWER MUST BE FULLY VISIBLE AT ALL TIMES 🚨");
   parts.push("");
   parts.push("SIDEBAR/PANEL RULES (form filling, tools, controls):");
-  parts.push("✓ MUST be COLLAPSIBLE - can hide completely and keep that collapsible thing little lower to toolbarkit items");
+  parts.push("✓ MUST be COLLAPSIBLE - can hide completely");
   parts.push("✓ When COLLAPSED: show ONLY small button (40-50px, floating at edge)");
   parts.push("✓ Button text examples: '☰ Open Form', '≡ Tools', '+ Controls'");
   parts.push("✓ When EXPANDED: sidebar shows, viewer stays visible (flex: 1)");
   parts.push("✓ Smooth CSS transitions (transform/margin/width animations)");
   parts.push("✓ Add close button inside expanded sidebar");
+  parts.push("✓ Sidebar background: #2a2424, border: 1px solid #3a3434");
   parts.push("");
   parts.push("LAYOUT PATTERNS:");
   parts.push("- Simple viewer = full screen, no sidebar");
   parts.push("- With features = collapsible sidebar (hideable to just a button)");
-  parts.push("- Navbar (top) = fine as-is, keep minimal (40-60px height)");
+  parts.push("- Navbar (top) = background #1a1414, border-bottom 1px solid #3a3434, height 40-60px");
   parts.push("- Dropdown/select elements for field selection");
   parts.push("- Responsive and mobile-friendly");
   parts.push("");
   parts.push("GOLDEN RULE: Form/tool UI = collapsible to small button. Viewer = always fully visible.");
   parts.push("");
-  parts.push("CREATIVE FREEDOM:");
-  parts.push("- Choose ANY color scheme you want");
-  parts.push("- Choose ANY font family you prefer");
-  parts.push("- Choose ANY layout structure that makes sense");
-  parts.push("- Add subtle animations and hover effects");
-  parts.push("- Make buttons/inputs/dropdowns beautiful");
-  parts.push("- Add icons, emojis, or visual elements");
+  parts.push("SPECIAL INSTRUCTIONS FOR FORM FILLING:");
+  parts.push("⚡ When user mentions 'fill form' or 'form filling':");
+  parts.push("  1. AUTOMATICALLY detect and fill ALL common form fields on page load");
+  parts.push("  2. Create a COLLAPSIBLE SIDEBAR (right side, 380px width)");
+  parts.push("  3. Sidebar shows: Auto-filled summary + Manual fill UI + Field inspector + Export button");
+  parts.push("  4. Sidebar MUST be hideable to a small toggle button (45x45px)");
+  parts.push("  5. Use smart field name matching (case-insensitive, fuzzy)");
+  parts.push("  6. Toggle button positioned: fixed, top: 80px, right: 20px");
+  parts.push("  7. Auto-fill common fields: firstname, lastname, email, phone, address, city, state, zip, date");
   parts.push("");
   parts.push("YOUR TASK:");
   parts.push("1. Understand the LOGIC from examples");
-  parts.push("2. Design a COMPLETELY UNIQUE, BEAUTIFUL UI");
+  parts.push("2. Apply the EXACT DESIGN SYSTEM specified above (colors, fonts, styling)");
   parts.push("3. Use ONLY Nutrient APIs (don't invent)");
   parts.push("4. If out of scope: <!-- OUT_OF_SCOPE: reason -->");
+  parts.push("5. NEVER deviate from the color scheme or typography - consistency is critical");
+  parts.push("6. For form filling: Follow the AUTOMATIC + MANUAL HYBRID pattern exactly");
   parts.push("");
-  parts.push("GO BEYOND LIMITS. BE CREATIVE. MAKE IT STUNNING. 🚀");
+  parts.push("🎯 USE THE EXACT DESIGN SYSTEM ABOVE - NO CREATIVE FREEDOM ON COLORS/FONTS!");
 
   return parts.join("\n");
 }
